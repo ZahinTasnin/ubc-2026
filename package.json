@@ -1,0 +1,32 @@
+{
+  "name": "hedged-refund-promotions",
+  "private": true,
+  "version": "0.0.0",
+  "description": "Simulation-first Solana hackathon MVP: on-chain conditional refunds + simulated prediction-market hedging (Devnet only).",
+  "packageManager": "pnpm@10.24.0",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "dev:web": "pnpm --filter @hedged/web dev",
+    "dev:api": "pnpm --filter @hedged/api dev",
+    "build": "pnpm -r build",
+    "typecheck": "pnpm -r typecheck",
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "anchor:build": "anchor build"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.39.0",
+    "eslint": "^9.39.0",
+    "prettier": "^3.10.1",
+    "typescript": "~5.9.3",
+    "typescript-eslint": "^8.72.2"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "esbuild"
+    ]
+  }
+}

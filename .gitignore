@@ -1,0 +1,25 @@
+node_modules/
+dist/
+.next/
+*.tsbuildinfo
+.DS_Store
+
+# Secrets — never commit
+.env
+.env.*
+!.env.example
+*.keypair.json
+*-keypair.json
+id.json
+relayer*.json
+
+# Anchor / Rust
+target/
+.anchor/
+test-ledger/
+programs/**/target/
+
+# Misc
+coverage/
+*.log
+.vercel/
