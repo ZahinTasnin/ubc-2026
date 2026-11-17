@@ -3,7 +3,8 @@
 ## Prerequisites
 
 - Node.js ≥ 22 (scaffolded on 25.6) and pnpm 10 (`packageManager` is pinned in `package.json`)
-- For Dev 2: Rust, Solana CLI 3.x, Anchor CLI 0.32.1 (via `avm`)
+- For Dev 2 (Anchor program): Rust, Solana CLI 3.x, Anchor CLI 0.32.1 (via `avm`)
+- For Dev 3: a QuickNode Devnet endpoint (RPC + WSS) and the committed IDL from Dev 2
 - A Solana Devnet wallet with Devnet SOL; a QuickNode Devnet endpoint (optional at first)
 
 ## Install and run
@@ -31,6 +32,13 @@ anchor build
   dependencies were pinned down (`blake3`, `zeroize`, `proc-macro-crate`, `indexmap`,
   `hashbrown`, ...). Avoid a blanket `cargo update`; if a build fails with `feature edition2024
 is required`, pin the named crate with `cargo update -p <crate> --precise <older>`.
+
+## Working in parallel
+
+Each developer branches from `main` and edits their own paths (`docs/developer-ownership.md`).
+Per-module checks: `pnpm --filter @hedged/solana typecheck` (Dev 3, independent of the API),
+`pnpm --filter @hedged/api typecheck` (Dev 4), `pnpm --filter @hedged/web typecheck` (Dev 1),
+`anchor build` (Dev 2).
 
 ## Environment
 

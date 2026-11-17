@@ -1,8 +1,7 @@
 //! Hedged refund promotions — escrow program skeleton (Dev 2).
 //!
-//! NO business logic yet. See CLAUDE.md §6 for the instruction/authority design:
-//! initialize_promo, deposit, mark_hedged, cancel_unhedged, resolve_promo, claim_refund,
-//! claim_merchant. Build the transition/authorization matrix BEFORE implementing.
+//! Account schemas, events and errors are defined; NO instructions yet. Spec (PDA seeds, vault
+//! model, authority/pause matrix, accounting): docs/interfaces.md §1–3, docs/workflow.md.
 use anchor_lang::prelude::*;
 
 pub mod errors;

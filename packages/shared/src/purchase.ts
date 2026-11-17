@@ -1,5 +1,6 @@
 import type { Base58, IsoTimestamp, TokenBaseUnits } from "./money";
 import type { OnChainPurchaseState, PurchaseStatus } from "./status";
+import type { PurchaseIdHex } from "./pda-seeds";
 
 /** Preliminary. Escrow facts (on-chain) are kept apart from orchestration (off-chain). */
 export interface Purchase {
@@ -10,6 +11,8 @@ export interface Purchase {
   // ---- ON-CHAIN (authoritative for funds) ----
   onChain: {
     purchasePda: Base58;
+    /** 16-byte purchase id (32 hex chars) used in the purchase PDA seeds. */
+    purchaseId: PurchaseIdHex;
     customer: Base58;
     amount: TokenBaseUnits;
     state: OnChainPurchaseState;

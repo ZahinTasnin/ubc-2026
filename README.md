@@ -3,15 +3,22 @@
 ## Repository structure
 
 ```text
-apps/web          Dev 1 — Next.js (App Router) + Tailwind + Solana wallet adapter
-apps/api          Dev 3 — Fastify API, Gemini adapter, hedging, Supabase, orchestration
-programs/escrow   Dev 2 — Anchor/Rust escrow program
-packages/solana   Dev 2 — Solana client, PDA helpers, QuickNode ingestion, relayer helpers
-packages/shared   Shared TypeScript DTOs, statuses, monetary conventions
-supabase/migrations   Dev 3 — PostgreSQL migrations
-tests/            Integration / scenario tests
-docs/             architecture, interfaces, ownership, setup
+apps/web              Dev 1 — Next.js (App Router) + Tailwind + Solana wallet adapter
+programs/escrow       Dev 2 — Anchor/Rust escrow program (+ idl/ export)
+packages/solana       Dev 3 — Solana SDK: PDAs, tx builders, QuickNode listeners, verification, relayer helpers
+apps/api              Dev 4 — Fastify API, Gemini adapter, hedge simulation, Supabase, workers
+supabase/migrations   Dev 4 — PostgreSQL migrations
+packages/shared       Shared TypeScript DTOs, statuses, SolanaServerGateway interface (all, via PR)
+tests/                Integration / scenario tests
+docs/                 architecture, interfaces, ownership, setup
 ```
+
+See [developer ownership](docs/developer-ownership.md) for boundaries and dependency direction.
+
+Architecture is finalized: one pooled vault per promotion + a Purchase PDA per deposit, on-chain
+`mark_hedged` by a single relayer, customer-pulled refunds after `cancel_unhedged`. Specs:
+[interfaces](docs/interfaces.md) (PDAs, events, gateway) and [workflow](docs/workflow.md)
+(state machines, races).
 
 ## Quick start
 
@@ -34,9 +41,9 @@ pnpm dev:api             # http://localhost:4000/health
 
 ## Status
 
-Scaffold only: structure, tooling, shared types, typed stubs. Business logic (escrow instructions,
+Scaffold only: structure, tooling, shared types, Anchor account/event/error definitions, typed stubs. Business logic (escrow instructions,
 deposit ingestion, Gemini adapter, hedge functionality, UI flows) is **not implemented**. Stubs throw
 `NotImplementedError` or return HTTP 501 rather than faking behavior.
 
-Docs: [architecture](docs/architecture.md) · [interfaces](docs/interfaces.md) ·
+Docs: [architecture](docs/architecture.md) · [interfaces](docs/interfaces.md) · [workflow](docs/workflow.md) ·
 [ownership](docs/developer-ownership.md) · [setup](docs/setup.md)

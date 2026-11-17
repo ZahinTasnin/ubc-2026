@@ -9,9 +9,12 @@ export interface Promotion {
   // ---- ON-CHAIN (authoritative) ----
   onChain: {
     promoPda: Base58 | null; // null until initialize_promo is confirmed
+    /** Promo PDA seed nonce (u64 as decimal string); see pda-seeds.ts. */
+    promoNonce: string;
     merchant: Base58;
-    relayer: Base58;
     mint: Base58;
+    /** Promotion-level vault: ATA(promo PDA, mint). */
+    vault: Base58 | null;
     /** Price/refund amount per purchase, base units (demo: "5000000"). */
     offerAmount: TokenBaseUnits;
     /** Unix seconds; deposits rejected after this. */
@@ -19,7 +22,7 @@ export interface Promotion {
     state: OnChainPromoState;
   };
 
-  // ---- OFF-CHAIN (Dev 3 / merchant config) ----
+  // ---- OFF-CHAIN (Dev 4 / merchant config) ----
   /** Exact Gemini market identifier used for quotes AND final settlement. */
   geminiMarketId: string;
   /** Human label, e.g. "Texas wins". */

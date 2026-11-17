@@ -1,9 +1,13 @@
-import type { OnChainPurchaseState, Purchase } from "@hedged/shared";
+import type { OnChainPromoAccount, OnChainPurchaseAccount } from "@hedged/shared";
 import { NotImplementedError } from "./errors";
 
-/** On-chain Purchase account view (authoritative for escrow). TODO(Dev 2): decode via IDL. */
-export type OnChainPurchase = Purchase["onChain"] & { state: OnChainPurchaseState };
+/** Authoritative on-chain reads (browser-safe). TODO(Dev 3): decode via the Dev 2 IDL. */
+export async function getPromoState(_promoPda: string): Promise<OnChainPromoAccount | null> {
+  throw new NotImplementedError("getPromoState");
+}
 
-export async function getPurchaseState(_purchasePda: string): Promise<OnChainPurchase> {
+export async function getPurchaseState(
+  _purchasePda: string,
+): Promise<OnChainPurchaseAccount | null> {
   throw new NotImplementedError("getPurchaseState");
 }

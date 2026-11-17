@@ -2,7 +2,7 @@ import { NotImplementedError } from "./errors";
 
 /**
  * Customer/merchant-signed transaction BUILDERS (unsigned; wallet signs in the browser).
- * TODO(Dev 2): implement against the generated IDL.
+ * TODO(Dev 3): implement against the generated IDL.
  */
 export function buildDepositTransaction(_args: unknown): never {
   throw new NotImplementedError("buildDepositTransaction");

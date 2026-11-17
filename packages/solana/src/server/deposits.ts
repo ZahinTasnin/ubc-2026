@@ -16,7 +16,7 @@ export interface DepositSubscription {
 
 /**
  * Independently verify a deposit tx: success, program ID, mint, accounts, amount, finality, and
- * event position. TODO(Dev 2). A WebSocket notification alone is NOT durable finality.
+ * event position. TODO(Dev 3). A WebSocket notification alone is NOT durable finality.
  */
 export async function verifyDeposit(
   _cfg: ServerSolanaConfig,
@@ -27,7 +27,7 @@ export async function verifyDeposit(
 
 /**
  * Emit only VERIFIED deposit events; dedupe by (signature, eventIndex); replay from checkpoint
- * after disconnects. TODO(Dev 2): QuickNode Streams or WSS logs subscription.
+ * after disconnects. TODO(Dev 3): QuickNode Streams or WSS logs subscription.
  */
 export async function subscribeToDeposits(
   _cfg: ServerSolanaConfig,
