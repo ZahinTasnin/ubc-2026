@@ -1237,7 +1237,10 @@ export type Escrow = {
     },
     {
       name: "purchaseCancelledEvent";
-      docs: ["Emitted by `cancel_unhedged`."];
+      docs: [
+        "Emitted by `cancel_unhedged` (relayer) AND by `cancel_expired_deposit` (customer, after the",
+        "timeout). The payload is identical; only the transaction signer differs.",
+      ];
       type: {
         kind: "struct";
         fields: [

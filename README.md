@@ -29,21 +29,24 @@ pnpm dev:web             # http://localhost:3000
 pnpm dev:api             # http://localhost:4000/health
 ```
 
-| Command          | What it does                                   |
-| ---------------- | ---------------------------------------------- |
-| `pnpm dev:web`   | Next.js dev server                             |
-| `pnpm dev:api`   | Fastify dev server (tsx watch)                 |
-| `pnpm build`     | Build all workspaces                           |
-| `pnpm typecheck` | TypeScript checks for all workspaces           |
-| `pnpm lint`      | ESLint across the repo                         |
-| `pnpm format`    | Prettier write (`format:check` in CI)          |
-| `anchor build`   | Build the escrow program (see `docs/setup.md`) |
+| Command             | What it does                                   |
+| ------------------- | ---------------------------------------------- |
+| `pnpm dev:web`      | Next.js dev server                             |
+| `pnpm dev:api`      | Fastify dev server (tsx watch)                 |
+| `pnpm build`        | Build all workspaces                           |
+| `pnpm typecheck`    | TypeScript checks for all workspaces           |
+| `pnpm lint`         | ESLint across the repo                         |
+| `pnpm format`       | Prettier write (`format:check` in CI)          |
+| `anchor build`      | Build the escrow program (see `docs/setup.md`) |
+| `anchor test`       | Escrow localnet tests (~25 min)                |
+| `pnpm escrow:check` | Escrow deployment-readiness check              |
 
 ## Status
 
-Scaffold only: structure, tooling, shared types, Anchor account/event/error definitions, typed stubs. Business logic (escrow instructions,
-deposit ingestion, Gemini adapter, hedge functionality, UI flows) is **not implemented**. Stubs throw
-`NotImplementedError` or return HTTP 501 rather than faking behavior.
+**Escrow program (Dev 2): implemented** — 12 Anchor instructions with localnet tests (see
+`programs/escrow/docs.md`; not yet deployed to Devnet). **Everything else is still scaffold only** (shared
+types, typed stubs): deposit ingestion, Gemini adapter, hedge functionality and UI flows are **not
+implemented**. Stubs throw `NotImplementedError` or return HTTP 501 rather than faking behavior.
 
 Docs: [architecture](docs/architecture.md) · [interfaces](docs/interfaces.md) · [workflow](docs/workflow.md) ·
 [ownership](docs/developer-ownership.md) · [setup](docs/setup.md)

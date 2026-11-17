@@ -18,7 +18,8 @@
     "anchor:build": "anchor build",
     "escrow:mint": "ts-node -P programs/escrow/scripts/tsconfig.json programs/escrow/scripts/create-mock-mint.ts",
     "escrow:init-config": "ts-node -P programs/escrow/scripts/tsconfig.json programs/escrow/scripts/init-config.ts",
-    "escrow:check": "ts-node -P programs/escrow/scripts/tsconfig.json programs/escrow/scripts/check-readiness.ts"
+    "escrow:check": "ts-node -P programs/escrow/scripts/tsconfig.json programs/escrow/scripts/check-readiness.ts",
+    "escrow:verify-docs": "ts-node -P programs/escrow/scripts/tsconfig.json programs/escrow/scripts/verify-docs.ts"
   },
   "devDependencies": {
     "@coral-xyz/anchor": "0.32.1",

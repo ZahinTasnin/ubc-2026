@@ -1,9 +1,9 @@
 //! Hedged refund promotions — escrow program (Dev 2).
 //!
-//! Implemented: initialize_config, set_paused, set_relayer, initialize_promo, deposit,
-//! mark_hedged, cancel_unhedged, resolve_promo, claim_refund, claim_merchant, set_cancel_timeout,
-//! cancel_expired_deposit. Spec (PDA seeds, vault
-//! model, authority/pause matrix, accounting): docs/interfaces.md §1–3, docs/workflow.md.
+//! 12 instructions: initialize_config, set_paused, set_relayer, set_cancel_timeout,
+//! initialize_promo, deposit, mark_hedged, cancel_unhedged, cancel_expired_deposit, resolve_promo,
+//! claim_refund, claim_merchant. Spec (PDA seeds, vault model, authority/pause matrix,
+//! accounting): docs/interfaces.md §1–3, docs/workflow.md; overview: programs/escrow/docs.md.
 use anchor_lang::prelude::*;
 use state::{Outcome, PURCHASE_ID_LEN};
 

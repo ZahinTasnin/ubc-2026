@@ -27,6 +27,17 @@ export function requireEnv(name: string): string {
   return v;
 }
 
+/** Refuses to write key material inside the repository (it may not be covered by .gitignore). */
+export function assertOutsideRepo(file: string) {
+  const resolved = path.resolve(expandHome(file));
+  if (resolved === REPO_ROOT || resolved.startsWith(REPO_ROOT + path.sep)) {
+    console.error(
+      `Refusing to write a keypair inside the repository (${resolved}). Use a path outside it.`,
+    );
+    process.exit(1);
+  }
+}
+
 export function loadKeypair(file: string): Keypair {
   const p = expandHome(file);
   if (!fs.existsSync(p)) {

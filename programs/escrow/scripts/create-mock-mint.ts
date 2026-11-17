@@ -25,7 +25,7 @@ import {
 import { Keypair, PublicKey } from "@solana/web3.js";
 import * as fs from "fs";
 import * as path from "path";
-import { connectDevnet, env, expandHome, loadKeypair, parsePubkey } from "./lib";
+import { assertOutsideRepo, connectDevnet, env, expandHome, loadKeypair, parsePubkey } from "./lib";
 
 const DECIMALS = 6;
 const dryRun = process.argv.includes("--dry-run");
@@ -52,6 +52,7 @@ function mintKeypair(): Keypair | null {
   if (fs.existsSync(file))
     return Keypair.fromSecretKey(Uint8Array.from(JSON.parse(fs.readFileSync(file, "utf8"))));
   if (dryRun) return null; // never invent an address in a dry run
+  assertOutsideRepo(file);
   fs.mkdirSync(path.dirname(file), { recursive: true });
   const kp = Keypair.generate();
   fs.writeFileSync(file, JSON.stringify(Array.from(kp.secretKey)), { mode: 0o600 });

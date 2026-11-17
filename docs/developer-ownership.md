@@ -27,14 +27,18 @@ backend Dev 4); cross-module scenario tests are a joint effort.
 - Promo/Purchase PDAs, escrow vault(s), authorization, accounting.
 - Architecture (final): one pooled token vault per promotion (ATA of the Promo PDA) + one
   Purchase PDA per deposit; exact per-purchase liabilities; checked u64 arithmetic; 6 decimals.
-- Instructions: `initialize_config`, `set_paused`, `set_relayer`, `initialize_promo`, `deposit`,
-  `mark_hedged`, `cancel_unhedged` (creates a refund entitlement), `resolve_promo`, `claim_refund`,
+- Instructions (12, all implemented): `initialize_config`, `set_paused`, `set_relayer`,
+  `set_cancel_timeout`, `initialize_promo`, `deposit`, `mark_hedged`, `cancel_unhedged` (relayer;
+  creates a refund entitlement), `cancel_expired_deposit` (customer, after the timeout, `Deposited`
+  purchases only), `resolve_promo` (only at/after the deposit deadline), `claim_refund`,
   `claim_merchant`. Authority and pause matrix: `docs/interfaces.md` §2. One authorized relayer,
   admin pause (no withdrawal power), one-time resolution, double-claim prevention.
 - Events: `DepositEvent`, `HedgeMarkedEvent`, `PurchaseCancelledEvent`, `ResolutionEvent`,
   `ClaimEvent` (schemas in `docs/interfaces.md` §3; Rust in `programs/escrow/src/events.rs`).
-- Exports IDL, program ID, account schemas and PDA-seed docs; Anchor tests; Devnet deployment;
-  mock mint creation.
+- Exports IDL, program ID, account schemas and PDA-seed docs; Anchor tests; Devnet deployment
+  (**not yet deployed**); mock mint creation. Handoff docs: `programs/escrow/docs/` (SECURITY,
+  INTEGRATION, DEVNET) and `programs/escrow/docs.md`. Tooling: `pnpm escrow:check|mint|init-config`.
+- Does **not** perform API retries, order handling or hedge reconciliation (Dev 4).
 - **Boundary:** on-chain logic only — not QuickNode, listeners, or the off-chain Solana SDK.
 
 ## Developer 3 — Solana infrastructure (QuickNode, web3.js, Anchor TS client)
@@ -59,7 +63,13 @@ backend Dev 4); cross-module scenario tests are a joint effort.
 - Consumes verified deposits via `SolanaServerGateway`; persists the simulated hedge once
   (unique per purchase), then calls `markHedged` and sets HEDGED only on a confirmed receipt; on
   hedge failure calls `cancelUnhedged` (customer then claims the refund; REFUNDED only after the
-  claim is verified); at event end calls `resolvePromotion`. Idempotent processing, retries, reconciliation.
+  claim is verified); at event end (and not before the deposit deadline) calls `resolvePromotion`.
+  Idempotent processing, retries, reconciliation.
+- **Pending requirement (not implemented or verified):** idempotent hedge execution keyed by the
+  Purchase PDA, bounded retries with backoff and jitter, order-status reconciliation, stop hedging well
+  before the on-chain cancel timeout (Devnet default 600 s), handling the customer-cancel race and
+  orphaned hedges, relayer-cancel only with no exposure. Normative text: `CLAUDE.md` §5.1; actionable
+  handoff: `programs/escrow/docs/INTEGRATION.md`.
 - **Boundary:** no Solana-specific logic (no raw web3.js/Anchor instruction building, no event
   decoding); no on-chain logic.
 

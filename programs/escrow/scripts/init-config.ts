@@ -8,7 +8,8 @@
  *
  * Environment: SOLANA_RPC_URL, ADMIN_KEYPAIR_PATH (default ~/.config/solana/id.json; must be the
  * upgrade authority), MOCK_USDC_MINT, RELAYER_PUBLIC_KEY (public key only), ANCHOR_PROGRAM_ID
- * (optional override of the IDL address), ALLOW_NON_DEVNET=1 (local validator only).
+ * (optional override of the IDL address), ALLOW_NON_DEVNET=1 (local validator only),
+ * ALLOW_ADMIN_AS_RELAYER=1 (throwaway local tests only).
  */
 import * as anchor from "@coral-xyz/anchor";
 import { PublicKey } from "@solana/web3.js";
@@ -30,6 +31,13 @@ async function main() {
   const admin = loadKeypair(env("ADMIN_KEYPAIR_PATH", "~/.config/solana/id.json")!);
   const mint = parsePubkey("MOCK_USDC_MINT", requireEnv("MOCK_USDC_MINT"));
   const relayer = parsePubkey("RELAYER_PUBLIC_KEY", requireEnv("RELAYER_PUBLIC_KEY"));
+  // Role separation (docs/SECURITY.md D5): the relayer must not be the admin/deployer key.
+  if (relayer.equals(admin.publicKey) && env("ALLOW_ADMIN_AS_RELAYER") !== "1") {
+    console.error(
+      "RELAYER_PUBLIC_KEY equals the admin/deployer key. Use a separate relayer keypair (set ALLOW_ADMIN_AS_RELAYER=1 only for throwaway local tests).",
+    );
+    process.exit(1);
+  }
   // Customer-recovery timeout (seconds): how long a purchase may sit un-hedged before its customer
   // can cancel it themselves. Must exceed the backend's hedge window. Range 1s..30 days.
   const cancelTimeout = Number(env("CANCEL_TIMEOUT_SECS", "600"));

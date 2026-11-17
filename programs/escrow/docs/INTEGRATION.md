@@ -267,48 +267,160 @@ returns names in that IDL form or camelCase depending on version, so compare cas
 ## Business rules the integrators must respect
 
 - Do not fulfill before `HEDGED` (off-chain rule; not enforced on-chain).
-- **Hedge window vs cancel timeout (Dev 4):** keep the hedge window (simulate + `markHedged` + confirmation)
-  well below `cancel_timeout_secs` (`Promo.cancelTimeoutSecs`, default 600 s). After
-  `depositedAt + cancelTimeoutSecs` the customer can cancel a still-`Deposited` purchase themselves; stop
-  hedging attempts before then and, on any observed `PurchaseCancelledEvent` (relayer **or** customer),
-  void the simulated hedge (`VOIDED`). A customer cancellation looks identical to a relayer one in the event
-  (the transaction signer differs).
+- **Hedge execution, retries and reconciliation (Dev 4) — PENDING, see the section below and
+  `CLAUDE.md` §5.1.** Not implemented or verified by Dev 2 or Dev 3.
 - A hedge confirmed after promo resolution fails (`PromoNotActive`): cancel instead.
-- A purchase still `Deposited` when the promo resolves is refund-only; only the relayer can cancel it.
+- A purchase still `Deposited` when the promo resolves is refund-only (it can never be paid to the merchant):
+  the relayer can cancel it at any time, and its customer can cancel it after the timeout.
 - `resolve_promo` is final; verify Gemini's official outcome and the exact `market_id` first.
 - `resolve_promo` is only possible from `deposit_deadline` on (D4, `6020 ResolutionTooEarly` before).
   Choose each promo's `deposit_deadline` no later than the event end.
-- Approved MVP decisions: single trusted relayer (D1) and the existing admin pause (D3) stay as they are.
-- Open decision that would add instructions/fields/layout changes: **D2** timeout recovery, see
-  `D2-PROPOSAL.md` (not implemented; decide before any Devnet deploy). Lower-priority items: `SECURITY.md` D5–D8.
+- Approved MVP decisions: single trusted relayer (D1), customer timeout cancel for **unhedged** purchases
+  only (D2; hedged purchases are never refunded by timeout, late resolution stays possible), existing admin
+  pause (D3), deposit-deadline enforcement (D4). Post-hedge merchandise returns are post-MVP
+  (`CLAUDE.md` §14.1). Remaining items: `SECURITY.md` D5–D8.
 
-## Inconsistencies / gaps found against `docs/interfaces.md` and shared files
+## Dev 3 handoff: Solana integration (actionable; implementation is PENDING with Dev 3)
 
-These are **flagged, not edited** (shared or other developers' files):
+> Nothing here is implemented by Dev 2 or verified in `packages/solana`. This is the contract Dev 3 builds against.
 
-1. **`initialize_config` accounts changed** (adds `program`, `program_data`; admin must be the upgrade
-   authority). `docs/interfaces.md` §2 already says "deployer/admin (once)" but does not list accounts.
-2. **No error-code table** in `docs/interfaces.md`; the gateway mapping above should be added there.
-   Codes are append-only; seven were added since the skeleton (`InvalidOfferAmount`, `InvalidDeadline`,
-   `EmptyMarketId`, `WrongDecimals`, `InvalidRelayer`, `InsufficientVaultFunds`, and now
-   `ResolutionTooEarly` for D4).
-   `docs/interfaces.md` §2 should also state that `resolve_promo` requires `now ≥ deposit_deadline`.
-3. **ATA wording:** interfaces §1/§2 say deposit/claim use the customer/merchant **ATA**; the
-   contract accepts any token account owned by the signer with the right mint (stricter alternative:
-   require the ATA; would be a behavior change).
-4. **`.env.example`:** `RELAYER_PUBLIC_KEY` comment says "must match `Promo.relayer`"; the relayer is
-   stored in **`Config.relayer`** (there is no `Promo.relayer`). Also missing (used by the Dev 2
-   scripts, read from the process environment, not auto-loaded): `PAYER_KEYPAIR_PATH`,
-   `ADMIN_KEYPAIR_PATH`, `DEPLOYER_KEYPAIR_PATH`, `MOCK_MINT_KEYPAIR_PATH`, `MINT_RECIPIENTS`,
-   `MINT_TOPUP_TOKENS`, `ALLOW_NON_DEVNET`.
-5. **New shared-interface surface from D2/D4 (flagged, not edited):** `docs/interfaces.md` §2 needs two
-   instruction rows (`set_cancel_timeout`, `cancel_expired_deposit`), the `resolve_promo` deadline rule, and
-   the `initialize_config(relayer, cancel_timeout_secs)` signature; `@hedged/shared` `OnChainConfig` and
-   `OnChainPromoAccount` need `cancelTimeoutSecs`; `README.md` instruction lists need the same sync
-   (CLAUDE.md §12.8). `CLAUDE.md` itself was updated (cancellation rule, authority table, §14 roadmap).
-   5b. **Outcome on resolution:** `docs/interfaces.md` §4 `resolvePromotion(…, "YES"|"NO")` — the
-   gateway must pass `{ yes: {} }` / `{ no: {} }` for `Outcome`.
-6. **Root `package.json`** gained Anchor-test devDependencies and three `escrow:*` scripts (Dev 2
-   tooling) — shared file, needs owners' review.
-7. `packages/solana` and `packages/shared` match the contract's seeds, states, events and field names
-   (checked by reading); `OnChainConfig`/`OnChainPurchaseAccount` omit `bump` (fine, internal).
+1. **IDL.** Use `programs/escrow/idl/escrow.json` (+ `escrow.ts` types) with the Anchor 0.32.1 TS client:
+   `new Program(idl, provider)`; the program ID is `idl.address`. Instruction/account names are camelCase in
+   TS (`cancelExpiredDeposit`, `setCancelTimeout`, `program.account.config|promo|purchase`). Re-copy the IDL
+   after every `anchor build` that changes the interface; the committed copy equals the build output
+   (`pnpm escrow:check`).
+2. **PDAs** (seeds in the table above; `promo_nonce` is u64 **little-endian**, `purchase_id` is exactly 16
+   bytes, the vault is `getAssociatedTokenAddressSync(mint, promoPda, true)` with `allowOwnerOffCurve`):
+   ```ts
+   const [config] = PublicKey.findProgramAddressSync([Buffer.from("config")], programId);
+   const [promo] = PublicKey.findProgramAddressSync(
+     [Buffer.from("promo"), merchant.toBuffer(), u64le(nonce)],
+     programId,
+   );
+   const [purchase] = PublicKey.findProgramAddressSync(
+     [Buffer.from("purchase"), promo.toBuffer(), customer.toBuffer(), purchaseId16],
+     programId,
+   );
+   ```
+3. **Who signs what** (fee payer = the signer unless a sponsor is added later):
+
+   | Instruction                                                            | Signer                  | Built by                                | Rent / notes                                                                                                   |
+   | ---------------------------------------------------------------------- | ----------------------- | --------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
+   | `initialize_promo`                                                     | merchant                | browser-safe builder                    | merchant pays Promo + vault rent; pass the vault ATA, `Config.mint`, token + associated-token programs         |
+   | `deposit`                                                              | customer                | browser-safe builder                    | customer pays Purchase rent; amount must equal `promo.offerAmount`; the UI generates the 16-byte `purchase_id` |
+   | `cancel_expired_deposit`                                               | the purchase's customer | browser-safe builder                    | only after `purchase.depositedAt + promo.cancelTimeoutSecs`; `Deposited` only                                  |
+   | `claim_refund`                                                         | the purchase's customer | browser-safe builder                    | destination: a token account owned by the customer with the promo mint (use the ATA)                           |
+   | `claim_merchant`                                                       | `promo.merchant`        | browser-safe builder                    | one purchase per transaction; destination owned by the merchant                                                |
+   | `mark_hedged`, `cancel_unhedged`, `resolve_promo`                      | `Config.relayer`        | **server-only** (`SolanaServerGateway`) | key loaded from `RELAYER_KEYPAIR_PATH`, never in a browser bundle                                              |
+   | `initialize_config`, `set_paused`, `set_relayer`, `set_cancel_timeout` | admin = deployer        | ops scripts, **not** the app SDK        | `programs/escrow/scripts`                                                                                      |
+
+4. **Claim / cancellation flows to support.** Hedge failed: relayer `cancelUnhedged` → customer `claim_refund`
+   (`CancelRefund`). Relayer silent: customer `cancel_expired_deposit` (after the timeout) → customer
+   `claim_refund`. YES: customer `claim_refund` per hedged purchase (`YesRefund`). NO: merchant
+   `claim_merchant` per hedged purchase (`MerchantPayout`). A hedged purchase can **never** be cancelled.
+   Expose a pure helper `canTimeoutCancel(purchase, promo, chainNowSeconds)` = `state == Deposited &&
+purchase.depositedAt + promo.cancelTimeoutSecs <= chainNow`, using **cluster time** (block time of a recent
+   slot), not the local clock.
+5. **Error handling** (program errors are final for that attempt; never blindly resend):
+
+   | Program error                                                                          | Gateway meaning                                                                                        | Retry?                                             |
+   | -------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ | -------------------------------------------------- |
+   | `6009 AlreadyHedged` / `6010 AlreadyCancelled` / `6008 AlreadyResolved` (same outcome) | `alreadyApplied: true` after re-reading state                                                          | no                                                 |
+   | `6002 InvalidState`                                                                    | `INVALID_STATE`: re-read the purchase/promo and attach the current state to the error                  | no (caller decides)                                |
+   | `6007 PromoNotActive` (`markHedged` after resolution)                                  | `INVALID_STATE`                                                                                        | no                                                 |
+   | `6020 ResolutionTooEarly`                                                              | retryable error **after** `Promo.depositDeadline` (carry the deadline); do not map to `alreadyApplied` | yes, later                                         |
+   | `6021 TimeoutNotElapsed`                                                               | retryable error after `depositedAt + cancelTimeoutSecs`                                                | yes, later                                         |
+   | `6001 Paused`                                                                          | `PAUSED`                                                                                               | after unpause                                      |
+   | `6000 Unauthorized`                                                                    | `NOT_AUTHORIZED`                                                                                       | no                                                 |
+   | `3012 AccountNotInitialized`                                                           | `ACCOUNT_NOT_FOUND`                                                                                    | no                                                 |
+   | RPC error, blockhash expired, dropped tx                                               | `RPC_UNAVAILABLE` / `BLOCKHASH_EXPIRED`                                                                | yes (resend-safe), bounded with backoff and jitter |
+   | no confirmation before `timeoutMs`                                                     | `TX_TIMEOUT` = **outcome unknown** → re-read account state before any retry                            | only after re-read                                 |
+
+   Simulate before sending to surface program errors early, and resend only when the failure is provably
+   resend-safe (blockhash expiry, RPC failure). State is the source of truth, not the error text.
+
+6. **`mark_hedged` vs customer cancellation race.** After any failure or timeout of `markHedged`, re-read the
+   purchase: `Hedged` → `alreadyApplied` (receipt with `signature: null` if the original is unknown);
+   `Cancelled`/`Refunded` → throw `INVALID_STATE` **with the observed state** (the customer's
+   `cancel_expired_deposit` or a relayer cancel won) so Dev 4 flags the executed hedge as orphaned exposure;
+   still `Deposited` → the send did not land: safe to retry within the backend's hedge window. Do the
+   same for `cancelUnhedged` (`Hedged` → `INVALID_STATE`).
+7. **Events.** Decode the five Anchor events from the IDL; each instruction emits exactly one. A
+   `PurchaseCancelledEvent` may come from the relayer **or** the customer (identical payload): if the
+   initiator matters, take it from the transaction's signers. Verify the finalized transaction and account
+   state before delivering (events are notifications, not proof). Handle `ClaimEvent.kind` values
+   `CancelRefund`, `YesRefund`, `MerchantPayout` and tolerate additional future variants.
+8. **Shared types to update (flagged for the owners of `packages/shared`):** `OnChainConfig` and
+   `OnChainPromoAccount` need `cancelTimeoutSecs`; add `buildCancelExpiredDepositTransaction` to the
+   browser-safe SDK surface; add a `cancelExpiredDeposit` flow to the status docs.
+
+## Dev 4 handoff: hedge execution, idempotency and the cancel timeout (PENDING)
+
+> **Status: PENDING.** These are requirements for Developer 4 (`CLAUDE.md` §5.1 is the normative text);
+> none of it is implemented or verified. The MVP places no real orders (Gemini is read-only), so "hedge
+> order" means the simulated hedge today and any real order post-MVP. Do not mark an item done without code
+> and a test.
+
+**What the contract gives you (facts to rely on, all read from chain):**
+
+| Need                               | On-chain fact                                                                                                                                                                                                        |
+| ---------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| The cancel deadline for a purchase | `Purchase.depositedAt + Promo.cancelTimeoutSecs` (the timeout is **per promo**, snapshotted at `initialize_promo`; the default set by `pnpm escrow:init-config` is **600 s**, tests use seconds; never hardcode 600) |
+| Is it still eligible to hedge?     | `Purchase.state == Deposited` **and** `Promo.state == Active` and not paused (`mark_hedged` is blocked while paused). Re-read **before** placing the hedge.                                                          |
+| Idempotency key                    | the Purchase PDA address (unique per deposit; also `purchase_id` + customer)                                                                                                                                         |
+| Who can end the `Deposited` state  | the relayer (`mark_hedged`, `cancel_unhedged`) **or the customer** after the timeout (`cancel_expired_deposit`); all mutually exclusive, first one wins                                                              |
+
+**Behaviours Dev 4 must implement (summary; details and checklist in `CLAUDE.md` §5.1):**
+
+1. **Idempotent hedge:** one hedge per Purchase PDA, enforced by a DB unique key created _before_ any
+   external call; duplicate deposit events, retries and restarts reuse it.
+2. **Retries:** bounded, exponential backoff + jitter; retryable (timeout, 429, 5xx) vs permanent;
+   native client-order-ID where available; never blindly resubmit when execution status is unknown.
+3. **Reconciliation:** after a timeout, look the order up before retrying; handle pending / partial /
+   filled / failed / cancelled; persist state across restarts; if the API cannot guarantee idempotency or
+   reliable lookup, never auto-resubmit an ambiguous order.
+4. **Timeout margin:** stop starting new hedges early enough before `depositedAt + cancelTimeoutSecs` for
+   execution **plus** `mark_hedged` **plus** confirmation (suggested start: last ~30% of the window); the
+   customer may cancel at the deadline even if your hedge is in flight.
+5. **Never assume off-chain success ⇒ on-chain `Hedged`.** Submit `markHedged` promptly and set `HEDGED`
+   only after the gateway receipt. Gateway outcomes: `alreadyApplied` (`6009 AlreadyHedged`) = done;
+   `INVALID_STATE` (`6002`, purchase `Cancelled`) = the customer (or the relayer) won the race;
+   `TX_TIMEOUT` = unknown → re-read the purchase first.
+6. **Lost race / permanent confirmation failure** (hedge executed, purchase `Cancelled`): the position is
+   **orphaned exposure** → flag for reconciliation/unwind; do not silently void or abandon it.
+7. **`cancelUnhedged` only with proof of no exposure** (no order placed, or all orders confirmed
+   failed/cancelled with zero fills, or fully unwound); otherwise flag manually. Remember the customer's
+   timeout cancel can happen on its own, so ambiguous cases need fast manual handling.
+8. **Reconcile continuously:** compare `listPurchases(promo)` against the persisted hedge table; repair or
+   alert on every mismatch.
+
+**Ownership:** Dev 4 = hedge execution, retries, idempotency, reconciliation. Dev 3 = Solana transaction
+integration; coordinates confirmation failures with Dev 4 (typed `SolanaGatewayError`, `alreadyApplied`,
+`TX_TIMEOUT`). Dev 2 = the Anchor program that enforces the purchase states and the timeout cancellation;
+it performs **no** API retries, order handling or reconciliation.
+
+## Interface audit (docs vs program vs IDL)
+
+**Fixed in this audit (documentation/config only; shared files are flagged for the owners' review):**
+
+- `docs/interfaces.md`: 12-instruction table with args, signers, pause behavior and time rules; full error
+  table (6000–6022) and check order; `Config`/`Promo` fields including `cancel_timeout_secs`; events note
+  that `PurchaseCancelledEvent` has two emitters; gateway timing/race notes; new browser-safe builder; the
+  decided-vs-open business rules.
+- `docs/workflow.md` (state machine, backend status edges, races, resolution timing), `docs/setup.md`,
+  `docs/developer-ownership.md` (Dev 2 and the pending Dev 4 requirements), `README.md` (status, commands).
+- `.env.example`: `RELAYER_PUBLIC_KEY` now correctly refers to `Config.relayer`; added the Dev 2 script
+  variables and `CANCEL_TIMEOUT_SECS=600`.
+- `CLAUDE.md`: repo layout, §5.1 (pending Dev 4 requirements), §6 (12 instructions, timeout, race and risks).
+- Program source comments (`state`, `events`, `lib.rs`) updated; IDL regenerated (doc strings only).
+
+**Still flagged — implementation code owned by others (not edited here):**
+
+1. `packages/shared`: `OnChainConfig`/`OnChainPromoAccount` lack `cancelTimeoutSecs`; `ClaimKind`, events and
+   seeds already match the contract (checked by reading).
+2. `packages/solana`: stubs only; needs the builders and gateway behavior in the Dev 3 section above.
+3. `apps/api`/`supabase`: the Dev 4 requirements (CLAUDE.md §5.1) and the `CANCELLED`-from-customer
+   transitions; the `PENDING_HEDGE`/`HEDGE_SIMULATED → CANCELLED` edges in `docs/workflow.md`.
+4. Root `package.json` holds Dev 2 tooling (`escrow:*` scripts, Anchor-test devDependencies): shared file.
+5. ATA wording: the contract accepts any token account owned by the signer with the right mint for
+   deposits and claims; interfaces now say so (stricter ATA-only enforcement would be a rule change; not done).

@@ -127,7 +127,8 @@ pub enum PromoState {
 pub enum PurchaseState {
     Deposited,
     Hedged,
-    /// cancel_unhedged done; customer is entitled to claim_refund.
+    /// Cancelled by the relayer (`cancel_unhedged`) or by the customer after the timeout
+    /// (`cancel_expired_deposit`); the customer is entitled to `claim_refund`.
     Cancelled,
     /// Cancelled purchase paid back to the customer.
     Refunded,
