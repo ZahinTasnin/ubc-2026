@@ -42,4 +42,6 @@ pub enum EscrowError {
     WrongDecimals,
     #[msg("Relayer must not be the default (all-zero) key")]
     InvalidRelayer,
+    #[msg("Vault cannot cover this payout")]
+    InsufficientVaultFunds,
 }

@@ -56,6 +56,136 @@
       "args": []
     },
     {
+      "name": "claim_merchant",
+      "discriminator": [212, 30, 160, 159, 247, 15, 123, 129],
+      "accounts": [
+        {
+          "name": "merchant",
+          "signer": true
+        },
+        {
+          "name": "config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [99, 111, 110, 102, 105, 103]
+              }
+            ]
+          }
+        },
+        {
+          "name": "promo",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [112, 114, 111, 109, 111]
+              },
+              {
+                "kind": "account",
+                "path": "promo.merchant",
+                "account": "Promo"
+              },
+              {
+                "kind": "account",
+                "path": "promo.promo_nonce",
+                "account": "Promo"
+              }
+            ]
+          },
+          "relations": ["purchase"]
+        },
+        {
+          "name": "purchase",
+          "writable": true
+        },
+        {
+          "name": "mint"
+        },
+        {
+          "name": "vault",
+          "writable": true
+        },
+        {
+          "name": "merchant_token_account",
+          "docs": ["Destination: must be owned by the merchant and hold the promo's mint."],
+          "writable": true
+        },
+        {
+          "name": "token_program",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "claim_refund",
+      "discriminator": [15, 16, 30, 161, 255, 228, 97, 60],
+      "accounts": [
+        {
+          "name": "customer",
+          "signer": true
+        },
+        {
+          "name": "config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [99, 111, 110, 102, 105, 103]
+              }
+            ]
+          }
+        },
+        {
+          "name": "promo",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [112, 114, 111, 109, 111]
+              },
+              {
+                "kind": "account",
+                "path": "promo.merchant",
+                "account": "Promo"
+              },
+              {
+                "kind": "account",
+                "path": "promo.promo_nonce",
+                "account": "Promo"
+              }
+            ]
+          },
+          "relations": ["purchase"]
+        },
+        {
+          "name": "purchase",
+          "writable": true
+        },
+        {
+          "name": "mint"
+        },
+        {
+          "name": "vault",
+          "writable": true
+        },
+        {
+          "name": "customer_token_account",
+          "docs": ["Destination: must be owned by the customer and hold the promo's mint."],
+          "writable": true
+        },
+        {
+          "name": "token_program",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        }
+      ],
+      "args": []
+    },
+    {
       "name": "deposit",
       "discriminator": [242, 35, 198, 137, 82, 225, 242, 182],
       "accounts": [
@@ -592,6 +722,11 @@
       "code": 6018,
       "name": "InvalidRelayer",
       "msg": "Relayer must not be the default (all-zero) key"
+    },
+    {
+      "code": 6019,
+      "name": "InsufficientVaultFunds",
+      "msg": "Vault cannot cover this payout"
     }
   ],
   "types": [

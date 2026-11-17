@@ -62,6 +62,136 @@ export type Escrow = {
       args: [];
     },
     {
+      name: "claimMerchant";
+      discriminator: [212, 30, 160, 159, 247, 15, 123, 129];
+      accounts: [
+        {
+          name: "merchant";
+          signer: true;
+        },
+        {
+          name: "config";
+          pda: {
+            seeds: [
+              {
+                kind: "const";
+                value: [99, 111, 110, 102, 105, 103];
+              },
+            ];
+          };
+        },
+        {
+          name: "promo";
+          writable: true;
+          pda: {
+            seeds: [
+              {
+                kind: "const";
+                value: [112, 114, 111, 109, 111];
+              },
+              {
+                kind: "account";
+                path: "promo.merchant";
+                account: "promo";
+              },
+              {
+                kind: "account";
+                path: "promo.promo_nonce";
+                account: "promo";
+              },
+            ];
+          };
+          relations: ["purchase"];
+        },
+        {
+          name: "purchase";
+          writable: true;
+        },
+        {
+          name: "mint";
+        },
+        {
+          name: "vault";
+          writable: true;
+        },
+        {
+          name: "merchantTokenAccount";
+          docs: ["Destination: must be owned by the merchant and hold the promo's mint."];
+          writable: true;
+        },
+        {
+          name: "tokenProgram";
+          address: "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA";
+        },
+      ];
+      args: [];
+    },
+    {
+      name: "claimRefund";
+      discriminator: [15, 16, 30, 161, 255, 228, 97, 60];
+      accounts: [
+        {
+          name: "customer";
+          signer: true;
+        },
+        {
+          name: "config";
+          pda: {
+            seeds: [
+              {
+                kind: "const";
+                value: [99, 111, 110, 102, 105, 103];
+              },
+            ];
+          };
+        },
+        {
+          name: "promo";
+          writable: true;
+          pda: {
+            seeds: [
+              {
+                kind: "const";
+                value: [112, 114, 111, 109, 111];
+              },
+              {
+                kind: "account";
+                path: "promo.merchant";
+                account: "promo";
+              },
+              {
+                kind: "account";
+                path: "promo.promo_nonce";
+                account: "promo";
+              },
+            ];
+          };
+          relations: ["purchase"];
+        },
+        {
+          name: "purchase";
+          writable: true;
+        },
+        {
+          name: "mint";
+        },
+        {
+          name: "vault";
+          writable: true;
+        },
+        {
+          name: "customerTokenAccount";
+          docs: ["Destination: must be owned by the customer and hold the promo's mint."];
+          writable: true;
+        },
+        {
+          name: "tokenProgram";
+          address: "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA";
+        },
+      ];
+      args: [];
+    },
+    {
       name: "deposit";
       discriminator: [242, 35, 198, 137, 82, 225, 242, 182];
       accounts: [
@@ -656,6 +786,11 @@ export type Escrow = {
       code: 6018;
       name: "invalidRelayer";
       msg: "Relayer must not be the default (all-zero) key";
+    },
+    {
+      code: 6019;
+      name: "insufficientVaultFunds";
+      msg: "Vault cannot cover this payout";
     },
   ];
   types: [

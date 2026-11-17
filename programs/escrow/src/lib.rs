@@ -1,7 +1,7 @@
 //! Hedged refund promotions — escrow program (Dev 2).
 //!
 //! Implemented: initialize_config, set_paused, set_relayer, initialize_promo, deposit,
-//! mark_hedged, cancel_unhedged, resolve_promo. Claim instructions are still TODO. Spec (PDA seeds, vault
+//! mark_hedged, cancel_unhedged, resolve_promo, claim_refund, claim_merchant. Spec (PDA seeds, vault
 //! model, authority/pause matrix, accounting): docs/interfaces.md §1–3, docs/workflow.md.
 use anchor_lang::prelude::*;
 use state::{Outcome, PURCHASE_ID_LEN};
@@ -67,5 +67,13 @@ pub mod escrow {
 
     pub fn resolve_promo(ctx: Context<ResolvePromo>, outcome: Outcome) -> Result<()> {
         ctx.accounts.handler(outcome)
+    }
+
+    pub fn claim_refund(ctx: Context<ClaimRefund>) -> Result<()> {
+        ctx.accounts.handler()
+    }
+
+    pub fn claim_merchant(ctx: Context<ClaimMerchant>) -> Result<()> {
+        ctx.accounts.handler()
     }
 }
