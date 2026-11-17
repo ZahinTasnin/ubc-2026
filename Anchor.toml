@@ -15,8 +15,15 @@ escrow = "E6tFGqHoSUpQmL3U5u8TmYHDJnjdHm8yKk4KifJUt4zr"
 url = "https://api.apr.dev"
 
 [provider]
-cluster = "devnet"
+cluster = "localnet"
 wallet = "~/.config/solana/id.json"
 
+# Local tests load the program as UPGRADEABLE with the provider wallet as upgrade authority, like a
+# real deployment (initialize_config requires the upgrade authority as admin).
+[[test.genesis]]
+address = "E6tFGqHoSUpQmL3U5u8TmYHDJnjdHm8yKk4KifJUt4zr"
+program = "target/deploy/escrow.so"
+upgradeable = true
+
 [scripts]
-test = "echo 'TODO: escrow tests not yet implemented' && exit 0"
+test = "pnpm exec ts-mocha -p ./tests/tsconfig.json -t 1000000 tests/escrow/**/*.test.ts"

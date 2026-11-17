@@ -1,0 +1,1263 @@
+{
+  "address": "E6tFGqHoSUpQmL3U5u8TmYHDJnjdHm8yKk4KifJUt4zr",
+  "metadata": {
+    "name": "escrow",
+    "version": "0.1.0",
+    "spec": "0.1.0",
+    "description": "Hedged refund promotions — escrow program (Devnet MVP)"
+  },
+  "instructions": [
+    {
+      "name": "cancel_expired_deposit",
+      "discriminator": [162, 54, 209, 167, 202, 71, 255, 153],
+      "accounts": [
+        {
+          "name": "customer",
+          "signer": true
+        },
+        {
+          "name": "config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [99, 111, 110, 102, 105, 103]
+              }
+            ]
+          }
+        },
+        {
+          "name": "promo",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [112, 114, 111, 109, 111]
+              },
+              {
+                "kind": "account",
+                "path": "promo.merchant",
+                "account": "Promo"
+              },
+              {
+                "kind": "account",
+                "path": "promo.promo_nonce",
+                "account": "Promo"
+              }
+            ]
+          },
+          "relations": ["purchase"]
+        },
+        {
+          "name": "purchase",
+          "writable": true
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "cancel_unhedged",
+      "discriminator": [198, 51, 225, 178, 14, 169, 96, 221],
+      "accounts": [
+        {
+          "name": "relayer",
+          "signer": true
+        },
+        {
+          "name": "config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [99, 111, 110, 102, 105, 103]
+              }
+            ]
+          }
+        },
+        {
+          "name": "promo",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [112, 114, 111, 109, 111]
+              },
+              {
+                "kind": "account",
+                "path": "promo.merchant",
+                "account": "Promo"
+              },
+              {
+                "kind": "account",
+                "path": "promo.promo_nonce",
+                "account": "Promo"
+              }
+            ]
+          },
+          "relations": ["purchase"]
+        },
+        {
+          "name": "purchase",
+          "writable": true
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "claim_merchant",
+      "discriminator": [212, 30, 160, 159, 247, 15, 123, 129],
+      "accounts": [
+        {
+          "name": "merchant",
+          "signer": true
+        },
+        {
+          "name": "config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [99, 111, 110, 102, 105, 103]
+              }
+            ]
+          }
+        },
+        {
+          "name": "promo",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [112, 114, 111, 109, 111]
+              },
+              {
+                "kind": "account",
+                "path": "promo.merchant",
+                "account": "Promo"
+              },
+              {
+                "kind": "account",
+                "path": "promo.promo_nonce",
+                "account": "Promo"
+              }
+            ]
+          },
+          "relations": ["purchase"]
+        },
+        {
+          "name": "purchase",
+          "writable": true
+        },
+        {
+          "name": "mint"
+        },
+        {
+          "name": "vault",
+          "writable": true
+        },
+        {
+          "name": "merchant_token_account",
+          "docs": ["Destination: must be owned by the merchant and hold the promo's mint."],
+          "writable": true
+        },
+        {
+          "name": "token_program",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "claim_refund",
+      "discriminator": [15, 16, 30, 161, 255, 228, 97, 60],
+      "accounts": [
+        {
+          "name": "customer",
+          "signer": true
+        },
+        {
+          "name": "config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [99, 111, 110, 102, 105, 103]
+              }
+            ]
+          }
+        },
+        {
+          "name": "promo",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [112, 114, 111, 109, 111]
+              },
+              {
+                "kind": "account",
+                "path": "promo.merchant",
+                "account": "Promo"
+              },
+              {
+                "kind": "account",
+                "path": "promo.promo_nonce",
+                "account": "Promo"
+              }
+            ]
+          },
+          "relations": ["purchase"]
+        },
+        {
+          "name": "purchase",
+          "writable": true
+        },
+        {
+          "name": "mint"
+        },
+        {
+          "name": "vault",
+          "writable": true
+        },
+        {
+          "name": "customer_token_account",
+          "docs": ["Destination: must be owned by the customer and hold the promo's mint."],
+          "writable": true
+        },
+        {
+          "name": "token_program",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "deposit",
+      "discriminator": [242, 35, 198, 137, 82, 225, 242, 182],
+      "accounts": [
+        {
+          "name": "customer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [99, 111, 110, 102, 105, 103]
+              }
+            ]
+          }
+        },
+        {
+          "name": "promo",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [112, 114, 111, 109, 111]
+              },
+              {
+                "kind": "account",
+                "path": "promo.merchant",
+                "account": "Promo"
+              },
+              {
+                "kind": "account",
+                "path": "promo.promo_nonce",
+                "account": "Promo"
+              }
+            ]
+          }
+        },
+        {
+          "name": "mint"
+        },
+        {
+          "name": "purchase",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [112, 117, 114, 99, 104, 97, 115, 101]
+              },
+              {
+                "kind": "account",
+                "path": "promo"
+              },
+              {
+                "kind": "account",
+                "path": "customer"
+              },
+              {
+                "kind": "arg",
+                "path": "purchase_id"
+              }
+            ]
+          }
+        },
+        {
+          "name": "customer_token_account",
+          "writable": true
+        },
+        {
+          "name": "vault",
+          "writable": true
+        },
+        {
+          "name": "token_program",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "purchase_id",
+          "type": {
+            "array": ["u8", 16]
+          }
+        },
+        {
+          "name": "amount",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "initialize_config",
+      "discriminator": [208, 127, 21, 1, 194, 190, 196, 70],
+      "accounts": [
+        {
+          "name": "admin",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "program",
+          "address": "E6tFGqHoSUpQmL3U5u8TmYHDJnjdHm8yKk4KifJUt4zr"
+        },
+        {
+          "name": "program_data"
+        },
+        {
+          "name": "config",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [99, 111, 110, 102, 105, 103]
+              }
+            ]
+          }
+        },
+        {
+          "name": "mint"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "relayer",
+          "type": "pubkey"
+        },
+        {
+          "name": "cancel_timeout_secs",
+          "type": "i64"
+        }
+      ]
+    },
+    {
+      "name": "initialize_promo",
+      "discriminator": [52, 108, 19, 60, 159, 89, 102, 72],
+      "accounts": [
+        {
+          "name": "merchant",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [99, 111, 110, 102, 105, 103]
+              }
+            ]
+          }
+        },
+        {
+          "name": "mint"
+        },
+        {
+          "name": "promo",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [112, 114, 111, 109, 111]
+              },
+              {
+                "kind": "account",
+                "path": "merchant"
+              },
+              {
+                "kind": "arg",
+                "path": "promo_nonce"
+              }
+            ]
+          }
+        },
+        {
+          "name": "vault",
+          "docs": [
+            "The single pooled vault: ATA of the Promo PDA (the PDA is the token authority).",
+            "`init_if_needed` (not `init`) so a third party cannot grief a promo by pre-creating its",
+            "deterministic vault ATA. Safe: the ATA address pins mint + owner (checked by the",
+            "`associated_token` constraints) and nobody can set a delegate/close authority on an ATA whose",
+            "owner is a not-yet-existing PDA."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "account",
+                "path": "promo"
+              },
+              {
+                "kind": "const",
+                "value": [
+                  6, 221, 246, 225, 215, 101, 161, 147, 217, 203, 225, 70, 206, 235, 121, 172, 28,
+                  180, 133, 237, 95, 91, 55, 145, 58, 140, 245, 133, 126, 255, 0, 169
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "mint"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                140, 151, 37, 143, 78, 36, 137, 241, 187, 61, 16, 41, 20, 142, 13, 131, 11, 90, 19,
+                153, 218, 255, 16, 132, 4, 142, 123, 216, 219, 233, 248, 89
+              ]
+            }
+          }
+        },
+        {
+          "name": "token_program",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        },
+        {
+          "name": "associated_token_program",
+          "address": "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "promo_nonce",
+          "type": "u64"
+        },
+        {
+          "name": "offer_amount",
+          "type": "u64"
+        },
+        {
+          "name": "deposit_deadline",
+          "type": "i64"
+        },
+        {
+          "name": "market_id",
+          "type": "string"
+        }
+      ]
+    },
+    {
+      "name": "mark_hedged",
+      "discriminator": [71, 115, 80, 81, 125, 127, 63, 172],
+      "accounts": [
+        {
+          "name": "relayer",
+          "signer": true
+        },
+        {
+          "name": "config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [99, 111, 110, 102, 105, 103]
+              }
+            ]
+          }
+        },
+        {
+          "name": "promo",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [112, 114, 111, 109, 111]
+              },
+              {
+                "kind": "account",
+                "path": "promo.merchant",
+                "account": "Promo"
+              },
+              {
+                "kind": "account",
+                "path": "promo.promo_nonce",
+                "account": "Promo"
+              }
+            ]
+          },
+          "relations": ["purchase"]
+        },
+        {
+          "name": "purchase",
+          "docs": [
+            "Must be this promo's purchase: seeds bind (promo, customer, purchase_id) to the account."
+          ],
+          "writable": true
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "resolve_promo",
+      "discriminator": [229, 176, 166, 195, 170, 115, 250, 198],
+      "accounts": [
+        {
+          "name": "relayer",
+          "signer": true
+        },
+        {
+          "name": "config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [99, 111, 110, 102, 105, 103]
+              }
+            ]
+          }
+        },
+        {
+          "name": "promo",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [112, 114, 111, 109, 111]
+              },
+              {
+                "kind": "account",
+                "path": "promo.merchant",
+                "account": "Promo"
+              },
+              {
+                "kind": "account",
+                "path": "promo.promo_nonce",
+                "account": "Promo"
+              }
+            ]
+          }
+        }
+      ],
+      "args": [
+        {
+          "name": "outcome",
+          "type": {
+            "defined": {
+              "name": "Outcome"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "set_cancel_timeout",
+      "discriminator": [136, 108, 195, 91, 237, 186, 34, 232],
+      "accounts": [
+        {
+          "name": "admin",
+          "signer": true,
+          "relations": ["config"]
+        },
+        {
+          "name": "config",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [99, 111, 110, 102, 105, 103]
+              }
+            ]
+          }
+        }
+      ],
+      "args": [
+        {
+          "name": "cancel_timeout_secs",
+          "type": "i64"
+        }
+      ]
+    },
+    {
+      "name": "set_paused",
+      "discriminator": [91, 60, 125, 192, 176, 225, 166, 218],
+      "accounts": [
+        {
+          "name": "admin",
+          "signer": true,
+          "relations": ["config"]
+        },
+        {
+          "name": "config",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [99, 111, 110, 102, 105, 103]
+              }
+            ]
+          }
+        }
+      ],
+      "args": [
+        {
+          "name": "paused",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "set_relayer",
+      "discriminator": [23, 243, 33, 88, 110, 84, 196, 37],
+      "accounts": [
+        {
+          "name": "admin",
+          "signer": true,
+          "relations": ["config"]
+        },
+        {
+          "name": "config",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [99, 111, 110, 102, 105, 103]
+              }
+            ]
+          }
+        }
+      ],
+      "args": [
+        {
+          "name": "new_relayer",
+          "type": "pubkey"
+        }
+      ]
+    }
+  ],
+  "accounts": [
+    {
+      "name": "Config",
+      "discriminator": [155, 12, 170, 224, 30, 250, 204, 130]
+    },
+    {
+      "name": "Promo",
+      "discriminator": [56, 91, 197, 41, 229, 168, 221, 54]
+    },
+    {
+      "name": "Purchase",
+      "discriminator": [33, 203, 1, 252, 231, 228, 8, 67]
+    }
+  ],
+  "events": [
+    {
+      "name": "ClaimEvent",
+      "discriminator": [93, 15, 70, 170, 48, 140, 212, 219]
+    },
+    {
+      "name": "DepositEvent",
+      "discriminator": [120, 248, 61, 83, 31, 142, 107, 144]
+    },
+    {
+      "name": "HedgeMarkedEvent",
+      "discriminator": [183, 113, 124, 116, 73, 42, 196, 29]
+    },
+    {
+      "name": "PurchaseCancelledEvent",
+      "discriminator": [105, 201, 64, 171, 239, 81, 150, 111]
+    },
+    {
+      "name": "ResolutionEvent",
+      "discriminator": [58, 223, 109, 183, 183, 149, 169, 251]
+    }
+  ],
+  "errors": [
+    {
+      "code": 6000,
+      "name": "Unauthorized",
+      "msg": "Unauthorized signer"
+    },
+    {
+      "code": 6001,
+      "name": "Paused",
+      "msg": "Program is paused"
+    },
+    {
+      "code": 6002,
+      "name": "InvalidState",
+      "msg": "Invalid state transition"
+    },
+    {
+      "code": 6003,
+      "name": "WrongMint",
+      "msg": "Wrong token mint"
+    },
+    {
+      "code": 6004,
+      "name": "WrongTokenAccount",
+      "msg": "Wrong token account or vault"
+    },
+    {
+      "code": 6005,
+      "name": "DepositClosed",
+      "msg": "Deposit window closed"
+    },
+    {
+      "code": 6006,
+      "name": "WrongAmount",
+      "msg": "Deposit amount must equal the promotion offer amount"
+    },
+    {
+      "code": 6007,
+      "name": "PromoNotActive",
+      "msg": "Promotion is not active"
+    },
+    {
+      "code": 6008,
+      "name": "AlreadyResolved",
+      "msg": "Promotion already resolved"
+    },
+    {
+      "code": 6009,
+      "name": "AlreadyHedged",
+      "msg": "Purchase already hedged"
+    },
+    {
+      "code": 6010,
+      "name": "AlreadyCancelled",
+      "msg": "Purchase already cancelled"
+    },
+    {
+      "code": 6011,
+      "name": "AlreadyClaimed",
+      "msg": "Funds already claimed"
+    },
+    {
+      "code": 6012,
+      "name": "MarketIdTooLong",
+      "msg": "Market id too long"
+    },
+    {
+      "code": 6013,
+      "name": "MathOverflow",
+      "msg": "Arithmetic overflow"
+    },
+    {
+      "code": 6014,
+      "name": "InvalidOfferAmount",
+      "msg": "Offer amount must be greater than zero"
+    },
+    {
+      "code": 6015,
+      "name": "InvalidDeadline",
+      "msg": "Deposit deadline must be in the future"
+    },
+    {
+      "code": 6016,
+      "name": "EmptyMarketId",
+      "msg": "Market id must not be empty"
+    },
+    {
+      "code": 6017,
+      "name": "WrongDecimals",
+      "msg": "Mint must have 6 decimals"
+    },
+    {
+      "code": 6018,
+      "name": "InvalidRelayer",
+      "msg": "Relayer must not be the default (all-zero) key"
+    },
+    {
+      "code": 6019,
+      "name": "InsufficientVaultFunds",
+      "msg": "Vault cannot cover this payout"
+    },
+    {
+      "code": 6020,
+      "name": "ResolutionTooEarly",
+      "msg": "Promotion cannot be resolved before its deposit deadline"
+    },
+    {
+      "code": 6021,
+      "name": "TimeoutNotElapsed",
+      "msg": "Cancel timeout has not elapsed yet"
+    },
+    {
+      "code": 6022,
+      "name": "InvalidTimeout",
+      "msg": "Cancel timeout out of range"
+    }
+  ],
+  "types": [
+    {
+      "name": "ClaimEvent",
+      "docs": [
+        "Emitted by `claim_refund` (CancelRefund | YesRefund) and `claim_merchant` (MerchantPayout)."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "promo",
+            "type": "pubkey"
+          },
+          {
+            "name": "purchase",
+            "type": "pubkey"
+          },
+          {
+            "name": "recipient",
+            "docs": ["Owner of the destination token account (customer or merchant)."],
+            "type": "pubkey"
+          },
+          {
+            "name": "amount",
+            "type": "u64"
+          },
+          {
+            "name": "kind",
+            "type": {
+              "defined": {
+                "name": "ClaimKind"
+              }
+            }
+          },
+          {
+            "name": "claimed_at",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "ClaimKind",
+      "type": {
+        "kind": "enum",
+        "variants": [
+          {
+            "name": "CancelRefund"
+          },
+          {
+            "name": "YesRefund"
+          },
+          {
+            "name": "MerchantPayout"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Config",
+      "docs": [
+        "Global singleton. PDA: [\"config\"]. Holds the single MVP relayer, the admin and the pause flag."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "admin",
+            "type": "pubkey"
+          },
+          {
+            "name": "relayer",
+            "docs": ["The one authorized relayer: mark_hedged, cancel_unhedged, resolve_promo."],
+            "type": "pubkey"
+          },
+          {
+            "name": "mint",
+            "docs": ["The only accepted mint (mock USD, 6 decimals)."],
+            "type": "pubkey"
+          },
+          {
+            "name": "paused",
+            "type": "bool"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          },
+          {
+            "name": "cancel_timeout_secs",
+            "docs": [
+              "Seconds after `Purchase.deposited_at` before the customer may cancel a still-`Deposited`",
+              "purchase themselves (`cancel_expired_deposit`). Snapshotted into each new Promo."
+            ],
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "DepositEvent",
+      "docs": ["Emitted by `deposit`."],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "promo",
+            "type": "pubkey"
+          },
+          {
+            "name": "purchase",
+            "type": "pubkey"
+          },
+          {
+            "name": "customer",
+            "type": "pubkey"
+          },
+          {
+            "name": "purchase_id",
+            "type": {
+              "array": ["u8", 16]
+            }
+          },
+          {
+            "name": "amount",
+            "type": "u64"
+          },
+          {
+            "name": "deposited_at",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "HedgeMarkedEvent",
+      "docs": ["Emitted by `mark_hedged`."],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "promo",
+            "type": "pubkey"
+          },
+          {
+            "name": "purchase",
+            "type": "pubkey"
+          },
+          {
+            "name": "relayer",
+            "type": "pubkey"
+          },
+          {
+            "name": "marked_at",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Outcome",
+      "type": {
+        "kind": "enum",
+        "variants": [
+          {
+            "name": "Yes"
+          },
+          {
+            "name": "No"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Promo",
+      "docs": [
+        "PDA: [\"promo\", merchant, promo_nonce.to_le_bytes()]. Also the authority of the vault ATA."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "merchant",
+            "type": "pubkey"
+          },
+          {
+            "name": "mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "vault",
+            "docs": ["ATA(promo PDA, mint). Stored for cheap verification; always re-derivable."],
+            "type": "pubkey"
+          },
+          {
+            "name": "promo_nonce",
+            "type": "u64"
+          },
+          {
+            "name": "offer_amount",
+            "docs": ["Exact amount every deposit must equal (demo: 5_000_000)."],
+            "type": "u64"
+          },
+          {
+            "name": "deposit_deadline",
+            "docs": ["Unix seconds; deposits rejected at/after this."],
+            "type": "i64"
+          },
+          {
+            "name": "market_id",
+            "docs": ["Exact Gemini market identifier (used for quotes AND final settlement)."],
+            "type": "string"
+          },
+          {
+            "name": "state",
+            "type": {
+              "defined": {
+                "name": "PromoState"
+              }
+            }
+          },
+          {
+            "name": "resolved_at",
+            "docs": ["0 until resolved."],
+            "type": "i64"
+          },
+          {
+            "name": "total_deposited",
+            "type": "u64"
+          },
+          {
+            "name": "total_paid_out",
+            "docs": ["Sum of all vault payouts (refunds + merchant payouts)."],
+            "type": "u64"
+          },
+          {
+            "name": "purchase_count",
+            "type": "u64"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          },
+          {
+            "name": "cancel_timeout_secs",
+            "docs": [
+              "Snapshot of `Config.cancel_timeout_secs` at `initialize_promo`: a later admin change cannot",
+              "shorten (or lengthen) the recovery term customers and the backend relied on for this promo."
+            ],
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "PromoState",
+      "type": {
+        "kind": "enum",
+        "variants": [
+          {
+            "name": "Active"
+          },
+          {
+            "name": "ResolvedYes"
+          },
+          {
+            "name": "ResolvedNo"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Purchase",
+      "docs": ["PDA: [\"purchase\", promo, customer, purchase_id (16 bytes)]. One per deposit."],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "promo",
+            "type": "pubkey"
+          },
+          {
+            "name": "customer",
+            "type": "pubkey"
+          },
+          {
+            "name": "purchase_id",
+            "docs": [
+              "Client-generated unique id (UUIDv4 bytes). Allows many purchases per customer."
+            ],
+            "type": {
+              "array": ["u8", 16]
+            }
+          },
+          {
+            "name": "amount",
+            "docs": [
+              "This purchase's liability inside the shared vault (== promo.offer_amount at deposit)."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "state",
+            "type": {
+              "defined": {
+                "name": "PurchaseState"
+              }
+            }
+          },
+          {
+            "name": "deposited_at",
+            "type": "i64"
+          },
+          {
+            "name": "hedged_at",
+            "docs": ["0 if never set."],
+            "type": "i64"
+          },
+          {
+            "name": "cancelled_at",
+            "type": "i64"
+          },
+          {
+            "name": "settled_at",
+            "type": "i64"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "PurchaseCancelledEvent",
+      "docs": [
+        "Emitted by `cancel_unhedged` (relayer) AND by `cancel_expired_deposit` (customer, after the",
+        "timeout). The payload is identical; only the transaction signer differs."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "promo",
+            "type": "pubkey"
+          },
+          {
+            "name": "purchase",
+            "type": "pubkey"
+          },
+          {
+            "name": "customer",
+            "type": "pubkey"
+          },
+          {
+            "name": "amount",
+            "type": "u64"
+          },
+          {
+            "name": "cancelled_at",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "PurchaseState",
+      "docs": [
+        "Purchase escrow lifecycle. Terminal states: Refunded, ClaimedByCustomer, ClaimedByMerchant."
+      ],
+      "type": {
+        "kind": "enum",
+        "variants": [
+          {
+            "name": "Deposited"
+          },
+          {
+            "name": "Hedged"
+          },
+          {
+            "name": "Cancelled"
+          },
+          {
+            "name": "Refunded"
+          },
+          {
+            "name": "ClaimedByCustomer"
+          },
+          {
+            "name": "ClaimedByMerchant"
+          }
+        ]
+      }
+    },
+    {
+      "name": "ResolutionEvent",
+      "docs": ["Emitted by `resolve_promo`."],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "promo",
+            "type": "pubkey"
+          },
+          {
+            "name": "outcome",
+            "type": {
+              "defined": {
+                "name": "Outcome"
+              }
+            }
+          },
+          {
+            "name": "relayer",
+            "type": "pubkey"
+          },
+          {
+            "name": "resolved_at",
+            "type": "i64"
+          }
+        ]
+      }
+    }
+  ]
+}

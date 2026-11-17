@@ -26,7 +26,8 @@ pub struct HedgeMarkedEvent {
     pub marked_at: i64,
 }
 
-/// Emitted by `cancel_unhedged`.
+/// Emitted by `cancel_unhedged` (relayer) AND by `cancel_expired_deposit` (customer, after the
+/// timeout). The payload is identical; only the transaction signer differs.
 #[event]
 pub struct PurchaseCancelledEvent {
     pub promo: Pubkey,
