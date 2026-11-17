@@ -14,6 +14,54 @@ export type Escrow = {
   };
   instructions: [
     {
+      name: "cancelExpiredDeposit";
+      discriminator: [162, 54, 209, 167, 202, 71, 255, 153];
+      accounts: [
+        {
+          name: "customer";
+          signer: true;
+        },
+        {
+          name: "config";
+          pda: {
+            seeds: [
+              {
+                kind: "const";
+                value: [99, 111, 110, 102, 105, 103];
+              },
+            ];
+          };
+        },
+        {
+          name: "promo";
+          pda: {
+            seeds: [
+              {
+                kind: "const";
+                value: [112, 114, 111, 109, 111];
+              },
+              {
+                kind: "account";
+                path: "promo.merchant";
+                account: "promo";
+              },
+              {
+                kind: "account";
+                path: "promo.promo_nonce";
+                account: "promo";
+              },
+            ];
+          };
+          relations: ["purchase"];
+        },
+        {
+          name: "purchase";
+          writable: true;
+        },
+      ];
+      args: [];
+    },
+    {
       name: "cancelUnhedged";
       discriminator: [198, 51, 225, 178, 14, 169, 96, 221];
       accounts: [
@@ -300,6 +348,13 @@ export type Escrow = {
           signer: true;
         },
         {
+          name: "program";
+          address: "E6tFGqHoSUpQmL3U5u8TmYHDJnjdHm8yKk4KifJUt4zr";
+        },
+        {
+          name: "programData";
+        },
+        {
           name: "config";
           writable: true;
           pda: {
@@ -323,6 +378,10 @@ export type Escrow = {
         {
           name: "relayer";
           type: "pubkey";
+        },
+        {
+          name: "cancelTimeoutSecs";
+          type: "i64";
         },
       ];
     },
@@ -371,7 +430,13 @@ export type Escrow = {
         },
         {
           name: "vault";
-          docs: ["The single pooled vault: ATA of the Promo PDA (the PDA is the token authority)."];
+          docs: [
+            "The single pooled vault: ATA of the Promo PDA (the PDA is the token authority).",
+            "`init_if_needed` (not `init`) so a third party cannot grief a promo by pre-creating its",
+            "deterministic vault ATA. Safe: the ATA address pins mint + owner (checked by the",
+            "`associated_token` constraints) and nobody can set a delegate/close authority on an ATA whose",
+            "owner is a not-yet-existing PDA.",
+          ];
           writable: true;
           pda: {
             seeds: [
@@ -597,6 +662,35 @@ export type Escrow = {
       ];
     },
     {
+      name: "setCancelTimeout";
+      discriminator: [136, 108, 195, 91, 237, 186, 34, 232];
+      accounts: [
+        {
+          name: "admin";
+          signer: true;
+          relations: ["config"];
+        },
+        {
+          name: "config";
+          writable: true;
+          pda: {
+            seeds: [
+              {
+                kind: "const";
+                value: [99, 111, 110, 102, 105, 103];
+              },
+            ];
+          };
+        },
+      ];
+      args: [
+        {
+          name: "cancelTimeoutSecs";
+          type: "i64";
+        },
+      ];
+    },
+    {
       name: "setPaused";
       discriminator: [91, 60, 125, 192, 176, 225, 166, 218];
       accounts: [
@@ -792,6 +886,21 @@ export type Escrow = {
       name: "insufficientVaultFunds";
       msg: "Vault cannot cover this payout";
     },
+    {
+      code: 6020;
+      name: "resolutionTooEarly";
+      msg: "Promotion cannot be resolved before its deposit deadline";
+    },
+    {
+      code: 6021;
+      name: "timeoutNotElapsed";
+      msg: "Cancel timeout has not elapsed yet";
+    },
+    {
+      code: 6022;
+      name: "invalidTimeout";
+      msg: "Cancel timeout out of range";
+    },
   ];
   types: [
     {
@@ -880,6 +989,14 @@ export type Escrow = {
           {
             name: "bump";
             type: "u8";
+          },
+          {
+            name: "cancelTimeoutSecs";
+            docs: [
+              "Seconds after `Purchase.deposited_at` before the customer may cancel a still-`Deposited`",
+              "purchase themselves (`cancel_expired_deposit`). Snapshotted into each new Promo.",
+            ];
+            type: "i64";
           },
         ];
       };
@@ -1027,6 +1144,14 @@ export type Escrow = {
           {
             name: "bump";
             type: "u8";
+          },
+          {
+            name: "cancelTimeoutSecs";
+            docs: [
+              "Snapshot of `Config.cancel_timeout_secs` at `initialize_promo`: a later admin change cannot",
+              "shorten (or lengthen) the recovery term customers and the backend relied on for this promo.",
+            ];
+            type: "i64";
           },
         ];
       };

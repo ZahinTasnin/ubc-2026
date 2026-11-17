@@ -5,7 +5,7 @@ use anchor_lang::prelude::*;
 
 /// Relayer records the final outcome of the promo's market, exactly once:
 /// `Active -> ResolvedYes | ResolvedNo`. Blocked while paused. Purchases are NOT touched here;
-/// each is settled by its own claim. The outcome is only accepted from the configured relayer
+/// each is settled by its own claim. Rejected before `promo.deposit_deadline` (D4). The outcome is only accepted from the configured relayer
 /// (trusted-relayer MVP; the backend must have verified official Gemini settlement off-chain).
 #[derive(Accounts)]
 pub struct ResolvePromo<'info> {
@@ -34,7 +34,14 @@ impl<'info> ResolvePromo<'info> {
             EscrowError::AlreadyResolved
         );
 
+        // D4: never before the deposit deadline. Checked AFTER the Active check so a retry on an
+        // already-resolved promo still reports `AlreadyResolved`. At the deadline itself, deposits
+        // are already closed (`deposits_open` is `now < deadline`), so there is no overlap.
         let now = Clock::get()?.unix_timestamp;
+        require!(
+            self.promo.resolution_open(now),
+            EscrowError::ResolutionTooEarly
+        );
         self.promo.state = match outcome {
             Outcome::Yes => PromoState::ResolvedYes,
             Outcome::No => PromoState::ResolvedNo,

@@ -44,4 +44,10 @@ pub enum EscrowError {
     InvalidRelayer,
     #[msg("Vault cannot cover this payout")]
     InsufficientVaultFunds,
+    #[msg("Promotion cannot be resolved before its deposit deadline")]
+    ResolutionTooEarly,
+    #[msg("Cancel timeout has not elapsed yet")]
+    TimeoutNotElapsed,
+    #[msg("Cancel timeout out of range")]
+    InvalidTimeout,
 }

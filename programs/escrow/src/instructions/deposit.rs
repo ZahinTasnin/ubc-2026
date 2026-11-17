@@ -55,10 +55,7 @@ impl<'info> Deposit<'info> {
         bump: u8,
     ) -> Result<()> {
         let now = Clock::get()?.unix_timestamp;
-        require!(
-            now < self.promo.deposit_deadline,
-            EscrowError::DepositClosed
-        );
+        require!(self.promo.deposits_open(now), EscrowError::DepositClosed);
         require!(amount == self.promo.offer_amount, EscrowError::WrongAmount);
 
         let total_deposited = self

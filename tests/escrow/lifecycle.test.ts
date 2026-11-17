@@ -7,6 +7,7 @@ import { Keypair, PublicKey } from "@solana/web3.js";
 import { expect } from "chai";
 import {
   OFFER,
+  PROMO_WINDOW_S,
   chainNow,
   configPda,
   connection,
@@ -22,6 +23,7 @@ import {
   purchasePda,
   setPaused,
   vaultAddress,
+  waitForPromoDeadline,
 } from "./helpers";
 
 const BN = anchor.BN;
@@ -34,14 +36,16 @@ describe("escrow relayer & hedge lifecycle", () => {
   let merchant: Keypair;
   let nonce = 100;
 
-  async function createPromo() {
+  // `windowS` = seconds until the deposit deadline. D4: resolve_promo is only possible from the
+  // deadline on, so tests that resolve use a short window and `resolve` waits it out.
+  async function createPromo(windowS = PROMO_WINDOW_S) {
     const n = ++nonce;
     const promo = promoPda(merchant.publicKey, n);
     await program.methods
       .initializePromo(
         new BN(n),
         new BN(OFFER.toString()),
-        new BN((await chainNow()) + 3600),
+        new BN((await chainNow()) + windowS),
         "GEMI-TEXAS-WIN",
       )
       .accounts({
@@ -87,12 +91,18 @@ describe("escrow relayer & hedge lifecycle", () => {
       .signers([signer])
       .rpc();
 
-  const resolve = (promo: PublicKey, outcome: Outcome, signer: Keypair = relayer) =>
+  // Waits for the deposit deadline (D4) when the relayer signs; negative tests with other signers
+  // fail on authorization before the timing check, so they need no wait.
+  const resolveNoWait = (promo: PublicKey, outcome: Outcome, signer: Keypair = relayer) =>
     program.methods
       .resolvePromo(outcomeArg(outcome))
       .accounts({ relayer: signer.publicKey, promo } as never)
       .signers([signer])
       .rpc();
+  const resolve = async (promo: PublicKey, outcome: Outcome, signer: Keypair = relayer) => {
+    if (signer === relayer) await waitForPromoDeadline(promo);
+    return resolveNoWait(promo, outcome, signer);
+  };
 
   const purchaseState = async (p: PublicKey) =>
     Object.keys((await program.account.purchase.fetch(p)).state)[0];
@@ -506,6 +516,72 @@ describe("escrow relayer & hedge lifecycle", () => {
       const { promo } = await createPromo();
       await resolve(promo, "no");
       expect(await promoState(promo)).to.equal("resolvedNo");
+    });
+  });
+
+  // D4 (approved): resolve_promo is rejected strictly before promo.deposit_deadline and allowed
+  // from the deadline on. The EXACT boundary (now = deadline-1 / deadline / deadline+1) is covered
+  // deterministically by the Rust unit tests in programs/escrow/src/state/mod.rs, because an
+  // on-chain transaction cannot be steered onto an exact second; here we test far-before and
+  // after, plus that deposits and resolution never overlap.
+  describe("resolve_promo — deposit-deadline enforcement (D4)", () => {
+    it("rejects YES and NO well before the deadline and leaves the promo Active", async () => {
+      const { promo } = await createPromo(60); // deadline a minute away
+      await deposit(promo);
+      await expectError(resolveNoWait(promo, "yes"), "ResolutionTooEarly");
+      await expectError(resolveNoWait(promo, "no"), "ResolutionTooEarly");
+      const p = await program.account.promo.fetch(promo);
+      expect(Object.keys(p.state)[0]).to.equal("active");
+      expect(p.resolvedAt.toNumber()).to.equal(0);
+    });
+
+    it("still allows deposits, mark_hedged and cancel_unhedged before the deadline", async () => {
+      const { promo } = await createPromo(60);
+      const a = await deposit(promo);
+      const b = await deposit(promo);
+      await expectError(resolveNoWait(promo, "yes"), "ResolutionTooEarly");
+      await markHedged(promo, a.purchase);
+      await cancelUnhedged(promo, b.purchase);
+      expect(await purchaseState(a.purchase)).to.equal("hedged");
+      expect(await purchaseState(b.purchase)).to.equal("cancelled");
+      await deposit(promo); // deposits remain open until the deadline
+    });
+
+    it("accepts resolution once the deadline has passed", async () => {
+      const { promo } = await createPromo(8);
+      const { purchase } = await deposit(promo);
+      await markHedged(promo, purchase);
+      await expectError(resolveNoWait(promo, "no"), "ResolutionTooEarly");
+      await waitForPromoDeadline(promo);
+      await resolveNoWait(promo, "no");
+      expect(await promoState(promo)).to.equal("resolvedNo");
+    });
+
+    it("never leaves a gap or overlap: after the deadline deposits are closed and resolution is open", async () => {
+      const { promo } = await createPromo(8);
+      const c = await customerWithTokens(mint, 3n * OFFER);
+      await deposit(promo, c); // still open
+      await waitForPromoDeadline(promo);
+      // deposits closed (the promo is still Active, so this is the deadline check, not PromoNotActive)
+      await expectError(deposit(promo, c), "DepositClosed");
+      await resolveNoWait(promo, "yes"); // and resolution is open
+      expect(await promoState(promo)).to.equal("resolvedYes");
+    });
+
+    it("authorization and pause take precedence over the timing check", async () => {
+      const { promo } = await createPromo(60);
+      await expectError(resolveNoWait(promo, "yes", merchant), "Unauthorized");
+      await setPaused(true);
+      await expectError(resolveNoWait(promo, "yes"), "Paused");
+      await setPaused(false);
+      await expectError(resolveNoWait(promo, "yes"), "ResolutionTooEarly");
+    });
+
+    it("an already-resolved promo reports AlreadyResolved, not a timing error", async () => {
+      const { promo } = await createPromo();
+      await resolve(promo, "yes");
+      await expectError(resolveNoWait(promo, "yes"), "AlreadyResolved");
+      await expectError(resolveNoWait(promo, "no"), "AlreadyResolved");
     });
   });
 

@@ -73,7 +73,7 @@ Each developer works on their own branch and edits only their own paths; changes
 ### Developer 2 — Smart contracts (`programs/escrow`) — Anchor, Rust, SPL Token
 
 - Promo/Purchase PDAs, escrow vault token accounts, authorization, accounting, token transfers, signer/mint constraints, state transitions.
-- Instructions: `initialize_config`, `set_paused`, `set_relayer`, `initialize_promo`, `deposit`, `mark_hedged`, `cancel_unhedged` (the single cancellation instruction; it creates a refund entitlement), `resolve_promo`, `claim_refund`, `claim_merchant`. Authority/pause matrix: `docs/interfaces.md` §2.
+- Instructions: `initialize_config`, `set_paused`, `set_relayer`, `set_cancel_timeout`, `initialize_promo`, `deposit`, `mark_hedged`, `cancel_unhedged` (the **relayer's** cancellation; it creates a refund entitlement), `cancel_expired_deposit` (the **customer's** timeout-based cancellation of a still-`Deposited` purchase; same entitlement, see §6), `resolve_promo`, `claim_refund`, `claim_merchant`. Authority/pause matrix: `docs/interfaces.md` §2 and §6 below.
 - Enforces one-time resolution, authorized relayer, emergency pause, double-claim prevention, deadlines.
 - Defines and emits `DepositEvent`, `HedgeMarkedEvent`, `PurchaseCancelledEvent`, `ResolutionEvent`, `ClaimEvent` (§6).
 - Exports Anchor IDL (`programs/escrow/idl/`), program ID, account schemas and PDA-derivation documentation; writes Anchor tests; creates the mock mint; deploys to Devnet.
@@ -125,7 +125,7 @@ Diagrams and transition tables: `docs/workflow.md`.
 
 ### Failure and non-atomicity policy
 
-The Solana deposit, the off-chain Gemini data/simulation, and the Supabase writes **cannot be atomic**. Failure is a **refund/unwind**, never a fictitious successful hedge. Handle partial simulated fills as **not fully covered**: bounded retry or cancel. Idempotent event handling is mandatory; retrying a failed `mark_hedged` reuses the persisted simulated hedge and never simulates again. `mark_hedged` and `cancel_unhedged` are mutually exclusive on-chain (both need `Deposited`): on `INVALID_STATE` the backend re-reads the purchase and aligns to chain state. Do not set `HEDGED`, `CANCELLED`, `REFUNDED` or `CLAIMED` until the corresponding on-chain transaction is verified.
+The Solana deposit, the off-chain Gemini data/simulation, and the Supabase writes **cannot be atomic**. Failure is a **refund/unwind**, never a fictitious successful hedge. Handle partial simulated fills as **not fully covered**: bounded retry or cancel. Idempotent event handling is mandatory; retrying a failed `mark_hedged` reuses the persisted simulated hedge and never simulates again. `mark_hedged`, `cancel_unhedged` and the customer's `cancel_expired_deposit` are mutually exclusive on-chain (all need `Deposited`): on `INVALID_STATE` the backend re-reads the purchase and aligns to chain state (a customer timeout-cancel can win the race against a slow `mark_hedged`; the backend then voids the simulated hedge). Do not set `HEDGED`, `CANCELLED`, `REFUNDED` or `CLAIMED` until the corresponding on-chain transaction is verified.
 
 ## 6. Anchor contract — finalized architecture (instructions still to be implemented by Dev 2)
 
@@ -137,22 +137,25 @@ Normative detail lives in `docs/interfaces.md` §1–3 and `programs/escrow/src/
 
 | Instruction | Action | Authority | While paused |
 |---|---|---|---|
-| `initialize_config` / `set_paused` / `set_relayer` | global config, pause, rotate relayer | Admin | allowed |
-| `initialize_promo` | create promo + vault | Merchant | blocked |
+| `initialize_config` / `set_paused` / `set_relayer` / `set_cancel_timeout` | global config (incl. customer-recovery timeout), pause, rotate relayer, set timeout for future promos | Admin (`initialize_config`: the program's upgrade authority) | allowed |
+| `initialize_promo` | create promo + vault (snapshots the config's cancel timeout) | Merchant | blocked |
 | `deposit` | lock tokens, create Purchase | Customer | blocked |
 | `mark_hedged` | `Deposited → Hedged` | The single relayer | blocked |
 | `cancel_unhedged` | `Deposited → Cancelled` (refund entitlement) | The single relayer | allowed |
-| `resolve_promo` | `Active → ResolvedYes/No`, once | The single relayer | blocked |
+| `cancel_expired_deposit` | `Deposited → Cancelled` (refund entitlement) once `now ≥ deposited_at + promo.cancel_timeout_secs`; never for a `Hedged` purchase | The purchase's own customer | allowed |
+| `resolve_promo` | `Active → ResolvedYes/No`, once, **only at/after `deposit_deadline`** | The single relayer | blocked |
 | `claim_refund` | `Cancelled → Refunded`, or `Hedged → ClaimedByCustomer` if YES | Purchase's customer | cancel path allowed; YES path blocked |
 | `claim_merchant` | `Hedged → ClaimedByMerchant` if NO | Promo's merchant | blocked |
 
 Prevent: hedging twice, hedging a cancelled purchase, cancelling a hedged purchase, double claims, repeated/conflicting resolution, deposits after the deadline or of a wrong amount, wrong mint/ATA, and one purchase consuming another's funds. Privileged instructions are retry-safe (distinct `Already*` errors; the gateway reports `alreadyApplied`).
 
-**Events** (Anchor payloads carry no signature/slot/index; the listener attaches them): `DepositEvent` (`deposit`), `HedgeMarkedEvent` (`mark_hedged`), `PurchaseCancelledEvent` (`cancel_unhedged`), `ResolutionEvent` (`resolve_promo`), `ClaimEvent` (`claim_refund`/`claim_merchant`). Exact fields, TS mapping, dedupe id `signature:eventIndex`, finality and missed/duplicate/reordered handling: `docs/interfaces.md` §3. Prefer integer base units (`5 tokens = 5_000_000`).
+**Events** (Anchor payloads carry no signature/slot/index; the listener attaches them): `DepositEvent` (`deposit`), `HedgeMarkedEvent` (`mark_hedged`), `PurchaseCancelledEvent` (`cancel_unhedged` **or** `cancel_expired_deposit`), `ResolutionEvent` (`resolve_promo`), `ClaimEvent` (`claim_refund`/`claim_merchant`). Exact fields, TS mapping, dedupe id `signature:eventIndex`, finality and missed/duplicate/reordered handling: `docs/interfaces.md` §3. Prefer integer base units (`5 tokens = 5_000_000`).
 
-**Open business rules (flagged, not decided):** treatment of purchases still `Deposited` at resolution (default: refund-only), customer escape hatch if the relayer disappears, no-resolution deadline, batch merchant claims. See `docs/interfaces.md` §8.
+**Decided MVP security rules** (`programs/escrow/docs/SECURITY.md`): (D1) one trusted relayer, no multisig/settlement delay/dispute mechanism; (D3) the admin pause stays as specified (no auto-expiry; cancelled-purchase refunds stay allowed while paused); (D4) `resolve_promo` is rejected strictly before `promo.deposit_deadline` (merchants must set the deadline no later than the event end); (D2, partially approved) a customer can cancel their own **`Deposited`** purchase after the configured timeout via `cancel_expired_deposit`, then refund through the normal `claim_refund` cancel path. **Hedged purchases are never refunded or expired by timeout**: an on-chain timeout does not prove an off-chain hedge was unwound, so a hedged purchase keeps waiting for resolution and **late resolution stays possible** (automatic promo-expiry refunds were reviewed and explicitly **not approved**; see `programs/escrow/docs/D2-PROPOSAL.md`). The backend's hedge window must stay well below `cancel_timeout_secs`, and it voids any simulated hedge for a purchase it sees cancelled on-chain.
 
-The concept document's names `mark_hedged` and `cancel_unhedged` are used; do not add a second cancellation instruction (`cancel_purchase`).
+**Open business rules (flagged, not decided):** treatment of purchases still `Deposited` at resolution (default: refund-only, now also customer-recoverable after the timeout), what to do for hedged purchases when no resolution ever arrives (currently: remain locked, relayer can resolve late), batch merchant claims. See `docs/interfaces.md` §8.
+
+The concept document's names `mark_hedged` and `cancel_unhedged` are used. There are exactly **two** cancellation paths, both ending in `Cancelled` + a refund entitlement and both requiring `Deposited`: the relayer's `cancel_unhedged` and the customer's timeout-gated `cancel_expired_deposit`. Do not add any other cancellation instruction (e.g. `cancel_purchase`); this supersedes the earlier "single cancellation instruction" rule.
 
 ## 7. QuickNode + Solana client boundary
 
@@ -241,5 +244,43 @@ All developers may work in parallel once type/schema/IDL/API interfaces are agre
 - Legal seller, escrow custodian, authorized trader, promotional obligor; jurisdictional eligibility, promotional/consumer disclosures, custody, KYC/AML and money transmission.
 - Exchange liquidity, real fill/slippage, capital funding, settlement currency mismatches, reconciliation of actual proceeds, fees and merchant economics.
 - Robust outcome attestation and correction/finality policy, challenge/dispute window, governance/rotation of trusted signer(s), production recovery.
+
+## 14. Post-MVP roadmap (prioritized; NOT part of the MVP — do not implement now)
+
+### 14.1 Post-Hedge Merchandise Returns & Hedge Unwinding — HIGH PRIORITY, first major post-MVP enhancement
+
+Today a purchase is `Hedged` until the market resolves and only then settles (YES → customer, NO → merchant); there is no way for a customer to return merchandise after the hedge was placed. This feature adds it. **Documentation only: do not implement in the MVP, in the Anchor program, the backend or the UI.**
+
+**Proposed workflow**
+
+1. The customer requests to return/cancel a purchase **after** the hedge has been placed.
+2. The merchant approves the return according to its return policy.
+3. The backend sells/unwinds the hedge contracts **allocated to that specific purchase**.
+4. The backend calculates the **realized hedge loss** from actual execution proceeds, accounting for trading fees and slippage.
+5. The customer receives a refund **minus the realized hedge loss**, if any, where such deductions are disclosed and legally permitted.
+6. The merchant is compensated for the realized hedge loss out of the escrow.
+7. The purchase moves to a terminal `Returned` state, preventing double claims.
+
+**Proposed refund formula**
+
+```
+deduction       = min(purchase_amount, max(0, original_hedge_cost - net_hedge_sale_proceeds))
+customer_refund = purchase_amount - deduction
+merchant_comp   = deduction
+```
+
+The deduction is capped at the purchase amount. If the hedge appreciates (proceeds ≥ cost) the deduction is 0: the customer receives the full purchase amount and the merchant retains any hedge profit. `net_hedge_sale_proceeds` must be the actual, confirmed execution proceeds net of fees and slippage, never a quoted or modeled price.
+
+**Implementation requirements to document and design before building**
+
+- **Per-purchase hedge position tracking:** each purchase's contracts, average cost, fees and fill history must be separable from other purchases (no pooled, unallocated positions).
+- **Merchant-approved return authorization:** an explicit, attributable approval (who, when, which purchase) before any unwind starts.
+- **Actual hedge sale execution and confirmation before on-chain settlement:** settle on-chain only after the sale is confirmed and the realized loss is final; never on a quote.
+- **Partial escrow payouts:** one purchase pays two parties (customer refund and merchant compensation) whose sum must equal exactly the purchase amount; a new on-chain `Returned` terminal state and a settlement instruction with checked arithmetic, authorized by the trusted relayer plus the merchant approval.
+- **Protection against double claims, partial fills and inconsistent backend reporting:** idempotent settlement keyed per purchase; partial unwind fills must not be reported as complete; reconcile backend ledger vs. on-chain state; the contract must cap total payouts at the purchase amount regardless of what the backend reports.
+- **Returns after the original escrow already settled:** define the handling when the market has resolved and the escrow was already claimed (clawback is not possible on-chain; needs merchant-funded refunds or a different settlement ordering).
+- **Compliance with applicable consumer refund requirements:** jurisdictional rules on refunds, deductions and disclosures must be reviewed before any deduction is applied (see §13).
+
+This interacts with the D2 timeout work only in that hedged purchases are deliberately **not** cancellable by an on-chain timeout: unwinding a real hedge must be confirmed off-chain first, which is exactly what this feature would provide.
 
 **Bottom line:** Build a demonstrable, auditable *simulation* of on-chain conditional refunds + off-chain prediction-market-informed hedge accounting. Keep every simulated execution clearly distinguished from actual chain transactions and Gemini market data.

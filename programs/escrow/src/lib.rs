@@ -1,7 +1,8 @@
 //! Hedged refund promotions — escrow program (Dev 2).
 //!
 //! Implemented: initialize_config, set_paused, set_relayer, initialize_promo, deposit,
-//! mark_hedged, cancel_unhedged, resolve_promo, claim_refund, claim_merchant. Spec (PDA seeds, vault
+//! mark_hedged, cancel_unhedged, resolve_promo, claim_refund, claim_merchant, set_cancel_timeout,
+//! cancel_expired_deposit. Spec (PDA seeds, vault
 //! model, authority/pause matrix, accounting): docs/interfaces.md §1–3, docs/workflow.md.
 use anchor_lang::prelude::*;
 use state::{Outcome, PURCHASE_ID_LEN};
@@ -20,8 +21,13 @@ declare_id!("E6tFGqHoSUpQmL3U5u8TmYHDJnjdHm8yKk4KifJUt4zr");
 pub mod escrow {
     use super::*;
 
-    pub fn initialize_config(ctx: Context<InitializeConfig>, relayer: Pubkey) -> Result<()> {
-        ctx.accounts.handler(relayer, ctx.bumps.config)
+    pub fn initialize_config(
+        ctx: Context<InitializeConfig>,
+        relayer: Pubkey,
+        cancel_timeout_secs: i64,
+    ) -> Result<()> {
+        ctx.accounts
+            .handler(relayer, cancel_timeout_secs, ctx.bumps.config)
     }
 
     pub fn set_paused(ctx: Context<SetPaused>, paused: bool) -> Result<()> {
@@ -74,6 +80,17 @@ pub mod escrow {
     }
 
     pub fn claim_merchant(ctx: Context<ClaimMerchant>) -> Result<()> {
+        ctx.accounts.handler()
+    }
+
+    pub fn set_cancel_timeout(
+        ctx: Context<SetCancelTimeout>,
+        cancel_timeout_secs: i64,
+    ) -> Result<()> {
+        ctx.accounts.handler(cancel_timeout_secs)
+    }
+
+    pub fn cancel_expired_deposit(ctx: Context<CancelExpiredDeposit>) -> Result<()> {
         ctx.accounts.handler()
     }
 }

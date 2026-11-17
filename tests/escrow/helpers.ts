@@ -10,6 +10,11 @@ import { Keypair, LAMPORTS_PER_SOL, PublicKey } from "@solana/web3.js";
 import { expect } from "chai";
 import type { Escrow } from "../../target/types/escrow";
 
+const BPF_LOADER_UPGRADEABLE = new PublicKey("BPFLoaderUpgradeab1e11111111111111111111111");
+
+/** Customer-recovery timeout used by the test Config (seconds). Short so tests can wait it out. */
+export const CANCEL_TIMEOUT_S = 8;
+
 export const OFFER = 5_000_000n; // 5 mock USD, 6 decimals
 export const DECIMALS = 6;
 
@@ -18,6 +23,18 @@ anchor.setProvider(provider);
 export const program = anchor.workspace.escrow as Program<Escrow>;
 export const connection = provider.connection;
 export const payer = (provider.wallet as anchor.Wallet).payer;
+
+/** ProgramData account of the upgradeable escrow program (its upgrade authority = deployer). */
+export const programDataPda = () =>
+  PublicKey.findProgramAddressSync([program.programId.toBuffer()], BPF_LOADER_UPGRADEABLE)[0];
+
+/** Accounts for `initialize_config`; only the deployer (upgrade authority) may sign as admin. */
+export const configAccounts = (admin: PublicKey, mint: PublicKey) => ({
+  admin,
+  program: program.programId,
+  programData: programDataPda(),
+  mint,
+});
 
 const u64le = (n: bigint | number) => new anchor.BN(n.toString()).toArrayLike(Buffer, "le", 8);
 
@@ -67,6 +84,20 @@ export async function waitUntilChainTime(ts: number) {
   while ((await chainNow()) < ts) await new Promise((r) => setTimeout(r, 500));
 }
 
+/**
+ * D4: resolve_promo is only allowed at/after `deposit_deadline`. Waits (chain time) until the
+ * promo's deadline has passed so a success-path resolve cannot hit ResolutionTooEarly.
+ * No-op if the promo does not exist (negative tests with forged accounts).
+ */
+export async function waitForPromoDeadline(promo: PublicKey) {
+  const p = await program.account.promo.fetchNullable(promo);
+  if (p) await waitUntilChainTime(p.depositDeadline.toNumber() + 1);
+}
+
+/** Default deposit window for tests that later resolve: long enough for several deposits, short
+ * enough that waiting for it is cheap. */
+export const PROMO_WINDOW_S = 14;
+
 /** Asserts `p` rejects with the named Anchor error code (or a message/log substring). */
 export async function expectError(p: Promise<unknown>, expected: string) {
   try {
@@ -91,8 +122,8 @@ export async function ensureConfig(): Promise<{ mint: PublicKey }> {
   if (existing) return { mint: existing.mint };
   const mint = await newMint();
   await program.methods
-    .initializeConfig(Keypair.generate().publicKey)
-    .accounts({ admin: payer.publicKey, mint } as never)
+    .initializeConfig(Keypair.generate().publicKey, new anchor.BN(CANCEL_TIMEOUT_S))
+    .accounts(configAccounts(payer.publicKey, mint) as never)
     .rpc();
   return { mint };
 }

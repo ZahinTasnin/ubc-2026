@@ -7,6 +7,7 @@ import { Keypair, PublicKey } from "@solana/web3.js";
 import { expect } from "chai";
 import {
   OFFER,
+  PROMO_WINDOW_S,
   chainNow,
   configPda,
   connection,
@@ -23,6 +24,7 @@ import {
   purchasePda,
   setPaused,
   vaultAddress,
+  waitForPromoDeadline,
 } from "./helpers";
 
 const BN = anchor.BN;
@@ -36,14 +38,16 @@ describe("escrow settlement (claim_refund / claim_merchant)", () => {
   let merchantAta: PublicKey;
   let nonce = 1000;
 
-  async function createPromo(owner: Keypair = merchant) {
+  // D4: resolve_promo only works from the deposit deadline on, so these tests (which resolve) use
+  // a short deposit window and `resolve` waits it out. Tests with many deposits pass a longer one.
+  async function createPromo(owner: Keypair = merchant, windowS = PROMO_WINDOW_S) {
     const n = ++nonce;
     const promo = promoPda(owner.publicKey, n);
     await program.methods
       .initializePromo(
         new BN(n),
         new BN(OFFER.toString()),
-        new BN((await chainNow()) + 3600),
+        new BN((await chainNow()) + windowS),
         "GEMI-TEXAS-WIN",
       )
       .accounts({ merchant: owner.publicKey, mint, vault: vaultAddress(promo, mint) } as never)
@@ -84,12 +88,14 @@ describe("escrow settlement (claim_refund / claim_merchant)", () => {
     relayerCall("markHedged", promo, purchase);
   const cancelUnhedged = (promo: PublicKey, purchase: PublicKey) =>
     relayerCall("cancelUnhedged", promo, purchase);
-  const resolve = (promo: PublicKey, o: Outcome) =>
-    program.methods
+  const resolve = async (promo: PublicKey, o: Outcome) => {
+    await waitForPromoDeadline(promo);
+    return program.methods
       .resolvePromo(o === "yes" ? { yes: {} } : { no: {} })
       .accounts({ relayer: relayer.publicKey, promo } as never)
       .signers([relayer])
       .rpc();
+  };
 
   async function claimRefund(
     promo: PublicKey,
@@ -662,7 +668,7 @@ describe("escrow settlement (claim_refund / claim_merchant)", () => {
   // ------------------------------------------------------------------------------ shared vault
   describe("multiple purchases sharing one vault", () => {
     it("NO: merchant gets hedged purchases, customers get cancelled ones, nothing leaks", async () => {
-      const { promo, vault } = await createPromo();
+      const { promo, vault } = await createPromo(merchant, 40); // 4 deposits + relayer calls
       const h1 = await purchaseIn(promo, "hedged");
       const h2 = await purchaseIn(promo, "hedged");
       const c1 = await purchaseIn(promo, "cancelled");
@@ -700,7 +706,7 @@ describe("escrow settlement (claim_refund / claim_merchant)", () => {
     });
 
     it("YES: each hedged customer claims only their own amount; merchant gets nothing", async () => {
-      const { promo, vault } = await createPromo();
+      const { promo, vault } = await createPromo(merchant, 30); // 3 deposits + marks
       const alice = await customerWithTokens(mint, 2n * OFFER);
       const a1 = await purchaseIn(promo, "hedged", alice);
       const a2 = await purchaseIn(promo, "hedged", alice); // same customer, two purchases

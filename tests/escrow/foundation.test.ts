@@ -5,8 +5,10 @@ import { getAccount } from "@solana/spl-token";
 import { Keypair, PublicKey } from "@solana/web3.js";
 import { expect } from "chai";
 import {
+  CANCEL_TIMEOUT_S,
   OFFER,
   chainNow,
+  configAccounts,
   configPda,
   connection,
   customerWithTokens,
@@ -101,31 +103,88 @@ describe("escrow foundation", () => {
       const bad = await newMint(9);
       await expectError(
         program.methods
-          .initializeConfig(relayer.publicKey)
-          .accounts({ admin: payer.publicKey, mint: bad } as never)
+          .initializeConfig(relayer.publicKey, new BN(CANCEL_TIMEOUT_S))
+          .accounts(configAccounts(payer.publicKey, bad) as never)
           .rpc(),
         "WrongDecimals",
       );
     });
 
+    // SECURITY regression: runs while Config does not exist yet. Before the fix, anyone could
+    // call initialize_config first and become admin / pick the relayer.
+    it("rejects initialization by anyone but the program's upgrade authority", async () => {
+      const attacker = await fundedWallet();
+      const m = await newMint(6);
+      await expectError(
+        program.methods
+          .initializeConfig(attacker.publicKey, new BN(CANCEL_TIMEOUT_S))
+          .accounts(configAccounts(attacker.publicKey, m) as never)
+          .signers([attacker])
+          .rpc(),
+        "Unauthorized",
+      );
+      expect(await program.account.config.fetchNullable(configPda())).to.equal(null);
+    });
+
+    it("rejects initialization with a program_data account that is not this program's", async () => {
+      const m = await newMint(6);
+      await expectError(
+        program.methods
+          .initializeConfig(relayer.publicKey, new BN(CANCEL_TIMEOUT_S))
+          .accounts({
+            ...configAccounts(payer.publicKey, m),
+            programData: m, // any other account
+          } as never)
+          .rpc(),
+        "AccountOwnedByWrongProgram",
+      );
+      expect(await program.account.config.fetchNullable(configPda())).to.equal(null);
+    });
+
+    it("rejects the all-zero relayer", async () => {
+      const m = await newMint(6);
+      await expectError(
+        program.methods
+          .initializeConfig(PublicKey.default, new BN(CANCEL_TIMEOUT_S))
+          .accounts(configAccounts(payer.publicKey, m) as never)
+          .rpc(),
+        "InvalidRelayer",
+      );
+    });
+
+    it("rejects a cancel timeout outside the allowed range", async () => {
+      const m = await newMint(6);
+      for (const bad of [0, -1, 30 * 24 * 60 * 60 + 1]) {
+        await expectError(
+          program.methods
+            .initializeConfig(relayer.publicKey, new BN(bad))
+            .accounts(configAccounts(payer.publicKey, m) as never)
+            .rpc(),
+          "InvalidTimeout",
+        );
+      }
+      expect(await program.account.config.fetchNullable(configPda())).to.equal(null);
+    });
+
     it("creates the singleton config", async () => {
       mint = await newMint(6);
       await program.methods
-        .initializeConfig(relayer.publicKey)
-        .accounts({ admin: payer.publicKey, mint } as never)
+        .initializeConfig(relayer.publicKey, new BN(CANCEL_TIMEOUT_S))
+        .accounts(configAccounts(payer.publicKey, mint) as never)
         .rpc();
       const cfg = await program.account.config.fetch(configPda());
       expect(cfg.admin.toBase58()).to.equal(payer.publicKey.toBase58());
       expect(cfg.relayer.toBase58()).to.equal(relayer.publicKey.toBase58());
       expect(cfg.mint.toBase58()).to.equal(mint.toBase58());
       expect(cfg.paused).to.equal(false);
+      expect(cfg.cancelTimeoutSecs.toNumber()).to.equal(CANCEL_TIMEOUT_S);
     });
 
     it("cannot be initialized twice", async () => {
       await expectError(
         program.methods
-          .initializeConfig(Keypair.generate().publicKey)
-          .accounts({ admin: payer.publicKey, mint } as never)
+          .initializeConfig(Keypair.generate().publicKey, new BN(CANCEL_TIMEOUT_S))
+          .accounts(configAccounts(payer.publicKey, mint) as never)
           .rpc(),
         "already in use",
       );
@@ -160,6 +219,8 @@ describe("escrow foundation", () => {
       expect(p.totalDeposited.toNumber()).to.equal(0);
       expect(p.totalPaidOut.toNumber()).to.equal(0);
       expect(p.purchaseCount.toNumber()).to.equal(0);
+      // the Config's recovery timeout is snapshotted into the promo
+      expect(p.cancelTimeoutSecs.toNumber()).to.equal(CANCEL_TIMEOUT_S);
       const v = await getAccount(connection, vault);
       expect(v.owner.toBase58()).to.equal(promo.toBase58());
       expect(v.mint.toBase58()).to.equal(mint.toBase58());

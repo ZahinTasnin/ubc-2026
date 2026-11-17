@@ -26,8 +26,12 @@ pub struct InitializePromo<'info> {
     )]
     pub promo: Account<'info, Promo>,
     /// The single pooled vault: ATA of the Promo PDA (the PDA is the token authority).
+    /// `init_if_needed` (not `init`) so a third party cannot grief a promo by pre-creating its
+    /// deterministic vault ATA. Safe: the ATA address pins mint + owner (checked by the
+    /// `associated_token` constraints) and nobody can set a delegate/close authority on an ATA whose
+    /// owner is a not-yet-existing PDA.
     #[account(
-        init,
+        init_if_needed,
         payer = merchant,
         associated_token::mint = mint,
         associated_token::authority = promo
@@ -71,6 +75,8 @@ impl<'info> InitializePromo<'info> {
             total_paid_out: 0,
             purchase_count: 0,
             bump,
+            // snapshot: later admin changes do not alter this promo's recovery term
+            cancel_timeout_secs: self.config.cancel_timeout_secs,
         });
         Ok(())
     }
