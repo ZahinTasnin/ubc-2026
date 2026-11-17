@@ -15,8 +15,8 @@ escrow = "E6tFGqHoSUpQmL3U5u8TmYHDJnjdHm8yKk4KifJUt4zr"
 url = "https://api.apr.dev"
 
 [provider]
-cluster = "devnet"
+cluster = "localnet"
 wallet = "~/.config/solana/id.json"
 
 [scripts]
-test = "echo 'TODO: escrow tests not yet implemented' && exit 0"
+test = "pnpm exec ts-mocha -p ./tests/tsconfig.json -t 1000000 tests/escrow/**/*.test.ts"

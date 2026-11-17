@@ -1,18 +1,71 @@
-//! Hedged refund promotions — escrow program skeleton (Dev 2).
+//! Hedged refund promotions — escrow program (Dev 2).
 //!
-//! Account schemas, events and errors are defined; NO instructions yet. Spec (PDA seeds, vault
+//! Implemented: initialize_config, set_paused, set_relayer, initialize_promo, deposit,
+//! mark_hedged, cancel_unhedged, resolve_promo. Claim instructions are still TODO. Spec (PDA seeds, vault
 //! model, authority/pause matrix, accounting): docs/interfaces.md §1–3, docs/workflow.md.
 use anchor_lang::prelude::*;
+use state::{Outcome, PURCHASE_ID_LEN};
 
 pub mod errors;
 pub mod events;
 pub mod instructions;
 pub mod state;
 
+use instructions::*;
+
 // Placeholder; replaced by `anchor keys sync` (keypair lives in target/deploy, gitignored).
 declare_id!("E6tFGqHoSUpQmL3U5u8TmYHDJnjdHm8yKk4KifJUt4zr");
 
 #[program]
 pub mod escrow {
-    // TODO(Dev 2): add instructions (one file each under src/instructions/).
+    use super::*;
+
+    pub fn initialize_config(ctx: Context<InitializeConfig>, relayer: Pubkey) -> Result<()> {
+        ctx.accounts.handler(relayer, ctx.bumps.config)
+    }
+
+    pub fn set_paused(ctx: Context<SetPaused>, paused: bool) -> Result<()> {
+        ctx.accounts.handler(paused)
+    }
+
+    pub fn initialize_promo(
+        ctx: Context<InitializePromo>,
+        promo_nonce: u64,
+        offer_amount: u64,
+        deposit_deadline: i64,
+        market_id: String,
+    ) -> Result<()> {
+        ctx.accounts.handler(
+            promo_nonce,
+            offer_amount,
+            deposit_deadline,
+            market_id,
+            ctx.bumps.promo,
+        )
+    }
+
+    pub fn deposit(
+        ctx: Context<Deposit>,
+        purchase_id: [u8; PURCHASE_ID_LEN],
+        amount: u64,
+    ) -> Result<()> {
+        ctx.accounts
+            .handler(purchase_id, amount, ctx.bumps.purchase)
+    }
+
+    pub fn set_relayer(ctx: Context<SetRelayer>, new_relayer: Pubkey) -> Result<()> {
+        ctx.accounts.handler(new_relayer)
+    }
+
+    pub fn mark_hedged(ctx: Context<MarkHedged>) -> Result<()> {
+        ctx.accounts.handler()
+    }
+
+    pub fn cancel_unhedged(ctx: Context<CancelUnhedged>) -> Result<()> {
+        ctx.accounts.handler()
+    }
+
+    pub fn resolve_promo(ctx: Context<ResolvePromo>, outcome: Outcome) -> Result<()> {
+        ctx.accounts.handler(outcome)
+    }
 }

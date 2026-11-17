@@ -32,4 +32,14 @@ pub enum EscrowError {
     MarketIdTooLong,
     #[msg("Arithmetic overflow")]
     MathOverflow,
+    #[msg("Offer amount must be greater than zero")]
+    InvalidOfferAmount,
+    #[msg("Deposit deadline must be in the future")]
+    InvalidDeadline,
+    #[msg("Market id must not be empty")]
+    EmptyMarketId,
+    #[msg("Mint must have 6 decimals")]
+    WrongDecimals,
+    #[msg("Relayer must not be the default (all-zero) key")]
+    InvalidRelayer,
 }
