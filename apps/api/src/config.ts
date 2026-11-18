@@ -6,6 +6,8 @@ export interface ApiConfig {
   hedge: { maxQuoteAgeMs: number; feeBps: number };
   /** Server-only. null = in-memory store (not durable). */
   supabase: { url: string; serviceRoleKey: string } | null;
+  /** Exposure desk (simulated netting across shops). */
+  desk: { lotContracts: number; rebalanceMs: number };
   workers: {
     /**
      * Which SolanaServerGateway backs the workers:
@@ -39,6 +41,10 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): ApiConfig {
       env.SUPABASE_URL && env.SUPABASE_SERVICE_ROLE_KEY
         ? { url: env.SUPABASE_URL, serviceRoleKey: env.SUPABASE_SERVICE_ROLE_KEY }
         : null,
+    desk: {
+      lotContracts: Math.max(1, nonNegativeInt(env.DESK_LOT_CONTRACTS, 10, "DESK_LOT_CONTRACTS")),
+      rebalanceMs: nonNegativeInt(env.DESK_REBALANCE_MS, 15_000, "DESK_REBALANCE_MS"),
+    },
     workers: {
       gateway: parseGatewayMode(env.SOLANA_GATEWAY),
       resolvePollMs: nonNegativeInt(env.RESOLVE_POLL_MS, 5000, "RESOLVE_POLL_MS"),

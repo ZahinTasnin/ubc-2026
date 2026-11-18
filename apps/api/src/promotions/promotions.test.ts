@@ -124,6 +124,8 @@ function stubGemini(ask: string): GeminiAdapter {
     listMarkets: notUsed,
     listWindows: notUsed,
     listGameLines: notUsed,
+    getEventInfo: notUsed,
+    getBook: notUsed,
     getOutcome: async () => null,
     getMarket: async () => market,
     getQuote: async (marketId) => ({

@@ -41,6 +41,8 @@ export interface RawEvent {
   contracts: RawContract[];
   /** Sibling markets of the same game (spreads, totals, ...), each with its own contracts. */
   events?: RawEvent[];
+  /** Sports taxonomy, e.g. { type: "moneyline", subject: "contest", scope: { type: "full_contest" } }. */
+  sportsMarket?: { type?: string; subject?: string; scope?: { type?: string } } | null;
 }
 
 export interface RawEventsPage {
