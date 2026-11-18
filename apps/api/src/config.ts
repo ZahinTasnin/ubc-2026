@@ -4,6 +4,17 @@ export interface ApiConfig {
   corsOrigin: string;
   gemini: { baseUrl: string; timeoutMs: number };
   hedge: { maxQuoteAgeMs: number; feeBps: number };
+  workers: {
+    /**
+     * Which SolanaServerGateway backs the workers:
+     * - "none": API only, no background workers (default until Dev 3's gateway lands)
+     * - "fake": IN-MEMORY fake chain + in-memory store, for local testing only (not Solana)
+     */
+    gateway: "none" | "fake";
+    resolvePollMs: number;
+    reconcileMs: number;
+    hedgeWindowFraction: number;
+  };
 }
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): ApiConfig {
@@ -22,6 +33,12 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): ApiConfig {
       baseUrl: env.GEMINI_API_BASE_URL || "https://api.gemini.com",
       timeoutMs: nonNegativeInt(env.GEMINI_TIMEOUT_MS, 5000, "GEMINI_TIMEOUT_MS"),
     },
+    workers: {
+      gateway: parseGatewayMode(env.SOLANA_GATEWAY),
+      resolvePollMs: nonNegativeInt(env.RESOLVE_POLL_MS, 5000, "RESOLVE_POLL_MS"),
+      reconcileMs: nonNegativeInt(env.RECONCILE_MS, 60_000, "RECONCILE_MS"),
+      hedgeWindowFraction: 0.7,
+    },
     hedge: {
       maxQuoteAgeMs: nonNegativeInt(env.HEDGE_MAX_QUOTE_AGE_MS, 15_000, "HEDGE_MAX_QUOTE_AGE_MS"),
       feeBps: nonNegativeInt(env.HEDGE_FEE_BPS, 0, "HEDGE_FEE_BPS"),
@@ -34,4 +51,12 @@ function nonNegativeInt(raw: string | undefined, fallback: number, name: string)
   const n = Number(raw);
   if (!Number.isInteger(n) || n < 0) throw new Error(`Invalid ${name}: ${raw}`);
   return n;
+}
+
+function parseGatewayMode(raw: string | undefined): "none" | "fake" {
+  const mode = raw || "none";
+  if (mode === "none" || mode === "fake") return mode;
+  throw new Error(
+    `SOLANA_GATEWAY=${mode} is not supported yet (real @hedged/solana gateway pending); use none or fake`,
+  );
 }

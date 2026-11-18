@@ -52,6 +52,12 @@ export class MemoryStore implements Store {
     return p ? { ...p } : null;
   }
 
+  async listActivePromotions() {
+    return [...this.promotions.values()]
+      .filter((p) => p.onChainState === "Active")
+      .map((p) => ({ ...p }));
+  }
+
   async listPromotionsDueForResolution(nowUnix: number) {
     return [...this.promotions.values()]
       .filter((p) => p.onChainState === "Active" && nowUnix >= p.depositDeadline)

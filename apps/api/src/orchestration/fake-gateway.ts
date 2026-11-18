@@ -140,6 +140,17 @@ export class FakeSolanaGateway implements SolanaServerGateway {
     };
   }
 
+  /** Deliver an event to subscribers, as the real listener would after verification. */
+  async emitDeposit(e: DepositEvent): Promise<void> {
+    for (const h of this.depositHandlers) await h(e);
+  }
+  async emitResolution(e: ResolutionEvent): Promise<void> {
+    for (const h of this.resolutionHandlers) await h(e);
+  }
+  async emitClaim(e: ClaimEvent): Promise<void> {
+    for (const h of this.claimHandlers) await h(e);
+  }
+
   // ---- SolanaServerGateway -------------------------------------------------------------------
 
   async subscribeToDeposits(h: EventHandler<DepositEvent>) {

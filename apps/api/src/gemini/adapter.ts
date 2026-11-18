@@ -1,7 +1,14 @@
-import type { MarketOutcome, MarketQuote, MarketSummary, QuoteLevel } from "@hedged/shared";
+import type {
+  MarketOutcome,
+  MarketQuote,
+  MarketSummary,
+  MarketWindow,
+  QuoteLevel,
+} from "@hedged/shared";
+import { latestDepositDeadline } from "../promotions/deadline";
 import type { GeminiClient } from "./client";
 import { qtyToHundredths, hundredthsToQty, usdToMicro, usdToMicroOrNull } from "./decimal";
-import type { RawBook, RawContract, RawEvent, RawEventsPage } from "./raw-types";
+import type { RawBook, RawContract, RawEvent, RawEventsPage, RawStrike } from "./raw-types";
 
 /**
  * Read-only Gemini Predictions adapter.
@@ -58,8 +65,18 @@ export interface QuoteResult {
   marketState: string | undefined;
 }
 
+/** Short crypto Up/Down event tickers, e.g. SOL05M2611180105 (asset, window minutes, YYMMDDHHMM). */
+const UP_DOWN_TICKER = /^([A-Z]{2,10})(\d{1,3})M(\d{10})$/;
+
 export interface GeminiAdapter {
   listMarkets(opts?: ListMarketsOptions): Promise<{ total: number; markets: MarketSummary[] }>;
+  /** One contract's summary (timing, state, snapshot prices). */
+  getMarket(marketId: string): Promise<MarketSummary>;
+  /** Next short Up/Down windows for an asset (default 5-minute), soonest first. */
+  listWindows(
+    asset: string,
+    opts?: { windowMinutes?: number; limit?: number },
+  ): Promise<MarketWindow[]>;
   getQuote(marketId: string): Promise<QuoteResult>;
   /** Official settlement only. Returns null while the contract is not yet settled. */
   getOutcome(marketId: string): Promise<MarketOutcome | null>;
@@ -106,11 +123,7 @@ export function createGeminiAdapter(
         throw new MarketNotOpenError(marketId, contract.marketState);
       const book = await client.get<RawBook>(`/v1/book/${encodeURIComponent(marketId)}`);
 
-      const asks: QuoteLevel[] = (book.asks ?? [])
-        .map((a) => ({ price: usdToMicro(a.price), qty: qtyToHundredths(a.amount) }))
-        .filter((a) => a.qty > 0n)
-        .sort((a, b) => (a.price < b.price ? -1 : a.price > b.price ? 1 : 0))
-        .map((a) => ({ priceMicroUsd: a.price.toString(), quantity: hundredthsToQty(a.qty) }));
+      const asks = parseAsks(book);
       const best = asks[0];
       if (!best) throw new QuoteUnavailableError(marketId);
 
@@ -127,6 +140,71 @@ export function createGeminiAdapter(
         outcomeLabel: contract.label,
         marketState: contract.marketState,
       };
+    },
+
+    async getMarket(marketId) {
+      const { event, contract } = await getContract(marketId);
+      return toSummary(event, contract, now().toISOString());
+    },
+
+    async listWindows(asset, opts = {}) {
+      const minutes = opts.windowMinutes ?? 5;
+      const limit = opts.limit ?? 8;
+      const page = await client.get<RawEventsPage>("/v1/prediction-markets/events", {
+        status: "active",
+        category: "Crypto",
+        search: asset,
+        limit: 100,
+      });
+      const fetchedAt = now();
+      const candidates = page.data
+        .filter((e) => {
+          const m = UP_DOWN_TICKER.exec(e.ticker);
+          return m?.[1] === asset && Number(m[2]) === minutes && e.contracts?.length === 1;
+        })
+        .map((e) => ({ event: e, contract: e.contracts[0]! }))
+        .filter(
+          ({ contract }) =>
+            contract.marketState === "open" &&
+            contract.effectiveDate &&
+            contract.expiryDate &&
+            Date.parse(contract.expiryDate) > fetchedAt.getTime(),
+        )
+        .sort((a, b) => Date.parse(a.contract.expiryDate!) - Date.parse(b.contract.expiryDate!))
+        .slice(0, limit);
+
+      return Promise.all(
+        candidates.map(async ({ event, contract }) => {
+          const [book, strike] = await Promise.all([
+            client.get<RawBook>(`/v1/book/${encodeURIComponent(contract.instrumentSymbol)}`),
+            client.get<RawStrike>(
+              `/v1/prediction-markets/events/${encodeURIComponent(event.ticker)}/strike`,
+            ),
+          ]);
+          const asks = parseAsks(book);
+          const depth = asks.reduce((sum, a) => sum + qtyToHundredths(a.quantity), 0n);
+          const summary = toSummary(event, contract, fetchedAt.toISOString());
+          return {
+            source: "gemini-predictions" as const,
+            marketId: contract.instrumentSymbol,
+            eventTicker: event.ticker,
+            title: event.title,
+            asset,
+            opensAt: contract.effectiveDate!,
+            expiresAt: contract.expiryDate!,
+            phase:
+              Date.parse(contract.effectiveDate!) <= fetchedAt.getTime()
+                ? ("open" as const)
+                : ("upcoming" as const),
+            strikeUsd: strike.value ?? null,
+            strikeAvailableAt: strike.availableAt ?? null,
+            bestAskMicroUsd: asks[0]?.priceMicroUsd ?? null,
+            askDepthContracts: hundredthsToQty(depth),
+            recommendedDepositDeadline: latestDepositDeadline(summary)!,
+            fetchedAt: fetchedAt.toISOString(),
+          };
+        }),
+      );
     },
 
     async getOutcome(marketId) {
@@ -165,6 +243,17 @@ function toSummary(event: RawEvent, c: RawContract, fetchedAt: string): MarketSu
     bestBidMicroUsd: micro(c.prices?.bestBid),
     lastTradeMicroUsd: micro(c.prices?.lastTradePrice),
     expiresAt: c.expiryDate ?? event.expiryDate ?? null,
+    opensAt: c.effectiveDate ?? null,
+    marketKind: UP_DOWN_TICKER.test(event.ticker) ? "UP_DOWN" : "STANDARD",
     fetchedAt,
   };
+}
+
+/** Ask side of a Gemini book, best (lowest) price first, empty levels dropped. */
+function parseAsks(book: RawBook): QuoteLevel[] {
+  return (book.asks ?? [])
+    .map((a) => ({ price: usdToMicro(a.price), qty: qtyToHundredths(a.amount) }))
+    .filter((a) => a.qty > 0n)
+    .sort((a, b) => (a.price < b.price ? -1 : a.price > b.price ? 1 : 0))
+    .map((a) => ({ priceMicroUsd: a.price.toString(), quantity: hundredthsToQty(a.qty) }));
 }

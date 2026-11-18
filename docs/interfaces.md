@@ -216,6 +216,11 @@ e.g. `GEMI-NCAAF-2611212030-ARK-TEX-M-TEX` (= "Texas" contract of Arkansas vs Te
   `{ quote: MarketQuote, eventTicker, eventTitle, outcomeLabel, marketState, estimate }`.
   `estimate` is a **simulated** hedge (`simulated: true`) when `refundAmount` is given, else null.
   404 unknown market · 409 market not open · 503 empty book / Gemini unavailable.
+- `GET /api/markets/windows?asset=SOL&windowMinutes=5&limit=8` → `{ source, asset, windows: MarketWindow[] }`:
+  the next short crypto Up/Down windows (live book, strike once captured, `recommendedDepositDeadline`).
+- `GET /api/markets/:id/deadline-check?depositDeadline=<unix>` → `{ marketId, marketKind, ok, latest, reason? }`.
+  Call before the merchant signs `initialize_promo`. Up/Down: deadline ≤ window open − 300 s; other
+  markets: ≤ expiry; always ≥ now + 60 s.
 - `GET /api/markets/:id/outcome` → `{ marketId, outcome: MarketOutcome | null }`. Only official
   Gemini settlement (`status=settled` + `resolutionSide`); `null` until then.
 

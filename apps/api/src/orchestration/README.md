@@ -11,8 +11,13 @@
 | `handleResolution(event)` / `handleClaim(event)` | resolution / claim subscriptions                                          |
 | `reconcilePromotion(id)`                         | timer + on boot: align DB with `listPurchases`, resume mid-flight work    |
 
-`fake-gateway.ts` is an **in-memory fake** of the gateway (not Solana) used by the tests until
-Dev 3's real `@hedged/solana/server` exists. Not wired into `server.ts` yet.
+`workers.ts` hosts the long-lived work: the three subscriptions (each acked to a checkpoint), a
+resolution poll every `RESOLVE_POLL_MS` (default 5 s), and a reconciliation sweep every
+`RECONCILE_MS` (default 60 s, plus once at boot). `index.ts` starts it based on `SOLANA_GATEWAY`:
+
+- `none` (default): API only, no workers.
+- `fake`: workers on `fake-gateway.ts`, an **in-memory fake** chain + `MemoryStore`. Not Solana,
+  not durable; local testing only. The real Devnet gateway (Dev 3) is not wired yet.
 
 ## CLAUDE.md §5.1 coverage (simulated hedge; `orchestrator.test.ts`, in-memory store)
 

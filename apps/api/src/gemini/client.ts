@@ -10,6 +10,8 @@
 const ALLOWED_PATHS: RegExp[] = [
   // List events / event by ticker / recently-settled (all public, no auth).
   /^\/v1\/prediction-markets\/events(\/[A-Za-z0-9._-]+)?$/,
+  // Strike (reference price) for crypto Up/Down events.
+  /^\/v1\/prediction-markets\/events\/[A-Za-z0-9._-]+\/strike$/,
   // Public order book; prediction contracts use their instrumentSymbol, e.g. GEMI-...-TEX.
   /^\/v1\/book\/[A-Za-z0-9._-]+$/,
 ];

@@ -8,6 +8,7 @@ import {
 } from "../gemini/adapter";
 import { GeminiNotFoundError, GeminiUnavailableError } from "../gemini/client";
 import { simulateHedge } from "../hedging/simulate";
+import { checkDepositDeadline } from "../promotions/deadline";
 
 const UINT_RE = /^\d{1,18}$/;
 
@@ -72,6 +73,43 @@ export function registerMarketRoutes(
       return sendGeminiError(reply, err);
     }
   });
+
+  // Upcoming short crypto windows for the live demo: ?asset=SOL&windowMinutes=5&limit=8
+  app.get<{ Querystring: { asset?: string; windowMinutes?: string; limit?: string } }>(
+    "/api/markets/windows",
+    async (req, reply) => {
+      const asset = (req.query.asset ?? "SOL").toUpperCase();
+      if (!/^[A-Z]{2,10}$/.test(asset)) return reply.code(400).send({ error: "invalid_asset" });
+      try {
+        const windows = await gemini.listWindows(asset, {
+          windowMinutes: clampInt(req.query.windowMinutes, 5, 1, 60),
+          limit: clampInt(req.query.limit, 8, 1, 20),
+        });
+        return { source: "gemini-predictions", asset, windows };
+      } catch (err) {
+        return sendGeminiError(reply, err);
+      }
+    },
+  );
+
+  // Would this on-chain deposit_deadline (unix seconds) keep purchases hedgeable?
+  // Call before the merchant signs initialize_promo.
+  app.get<{ Params: { id: string }; Querystring: { depositDeadline?: string } }>(
+    "/api/markets/:id/deadline-check",
+    async (req, reply) => {
+      const raw = req.query.depositDeadline;
+      if (raw === undefined || !/^\d{1,12}$/.test(raw)) {
+        return reply.code(400).send({ error: "invalid_deposit_deadline" });
+      }
+      try {
+        const market = await gemini.getMarket(req.params.id);
+        const check = checkDepositDeadline(market, Number(raw), Math.floor(Date.now() / 1000));
+        return { marketId: market.marketId, marketKind: market.marketKind, ...check };
+      } catch (err) {
+        return sendGeminiError(reply, err);
+      }
+    },
+  );
 
   // Official Gemini settlement for one contract. outcome=null means not settled yet.
   app.get<{ Params: { id: string } }>("/api/markets/:id/outcome", async (req, reply) => {

@@ -39,6 +39,36 @@ export interface MarketSummary {
   bestBidMicroUsd: PriceMicroUsd | null;
   lastTradeMicroUsd: PriceMicroUsd | null;
   expiresAt: IsoTimestamp | null;
+  /** Contract effectiveDate. For crypto Up/Down markets this is when the strike is captured. */
+  opensAt: IsoTimestamp | null;
+  /** "UP_DOWN" = short crypto window (e.g. SOL05M...), resolves vs the price at `opensAt`. */
+  marketKind: "UP_DOWN" | "STANDARD";
+  fetchedAt: IsoTimestamp;
+}
+
+/**
+ * One upcoming short crypto window ("is SOL up at the end of this 5-minute window?"), as listed by
+ * `GET /api/markets/windows`. Live data; nothing here is simulated.
+ */
+export interface MarketWindow {
+  source: "gemini-predictions";
+  marketId: string;
+  eventTicker: string;
+  title: string;
+  asset: string;
+  /** Strike captured / observation window starts. */
+  opensAt: IsoTimestamp;
+  /** Window ends; Gemini publishes the official result a few seconds later. */
+  expiresAt: IsoTimestamp;
+  phase: "upcoming" | "open";
+  /** Reference price in USD as Gemini returns it; null until captured at `strikeAvailableAt`. */
+  strikeUsd: string | null;
+  strikeAvailableAt: IsoTimestamp | null;
+  bestAskMicroUsd: PriceMicroUsd | null;
+  /** Contracts available on the ask side (sum of returned levels). */
+  askDepthContracts: string;
+  /** Latest safe on-chain deposit deadline for a promo on this window (unix seconds). */
+  recommendedDepositDeadline: number;
   fetchedAt: IsoTimestamp;
 }
 

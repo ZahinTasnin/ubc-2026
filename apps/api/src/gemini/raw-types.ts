@@ -20,6 +20,8 @@ export interface RawContract {
     lastTradePrice?: string | null;
   };
   expiryDate?: string | null;
+  /** When the contract's observation window starts (strike capture for crypto Up/Down). */
+  effectiveDate?: string | null;
   /** "yes" | "no" once the contract is officially settled; null before. */
   resolutionSide?: string | null;
   resolvedAt?: string | null;
@@ -51,4 +53,11 @@ export interface RawBookEntry {
 export interface RawBook {
   bids: RawBookEntry[];
   asks: RawBookEntry[];
+}
+
+export interface RawStrike {
+  type?: string;
+  /** Decimal string; absent/null until captured at availableAt. */
+  value?: string | null;
+  availableAt?: string | null;
 }

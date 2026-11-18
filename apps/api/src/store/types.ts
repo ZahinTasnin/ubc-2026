@@ -95,6 +95,8 @@ export interface Store {
   createPromotion(promotion: NewPromotion): Promise<PromotionRow>;
   getPromotionByPda(promoPda: Base58): Promise<PromotionRow | null>;
   getPromotion(id: string): Promise<PromotionRow | null>;
+  /** Promotions still Active on-chain (reconciliation sweep). */
+  listActivePromotions(): Promise<PromotionRow[]>;
   /** Promotions still Active on-chain whose deposit deadline has passed. */
   listPromotionsDueForResolution(nowUnix: number): Promise<PromotionRow[]>;
   setPromotionResolved(
