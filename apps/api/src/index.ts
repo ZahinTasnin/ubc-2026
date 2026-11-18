@@ -6,6 +6,7 @@ import {
 } from "@hedged/solana/server";
 import { loadConfig } from "./config";
 import { createGeminiAdapter } from "./gemini/adapter";
+import { withGeminiCache } from "./gemini/cached";
 import { createGeminiClient } from "./gemini/client";
 import { FakeSolanaGateway } from "./orchestration/fake-gateway";
 import { createOrchestrator } from "./orchestration/orchestrator";
@@ -17,7 +18,8 @@ import { createSupabaseStore } from "./store/supabase-store";
 import type { Store } from "./store/types";
 
 const config = loadConfig();
-const gemini = createGeminiAdapter(createGeminiClient(config.gemini));
+// Cached so polling screens and workers don't hit Gemini's rate limit (gemini/cached.ts).
+const gemini = withGeminiCache(createGeminiAdapter(createGeminiClient(config.gemini)));
 const store: Store = config.supabase
   ? createSupabaseStore(config.supabase.url, config.supabase.serviceRoleKey)
   : new MemoryStore();

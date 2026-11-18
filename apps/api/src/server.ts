@@ -8,6 +8,7 @@ import { registerHealthRoute } from "./routes/health";
 import { registerMarketRoutes } from "./routes/markets";
 import { registerPromotionRoutes } from "./routes/promotions";
 import { registerPurchaseRoutes } from "./routes/purchases";
+import { registerWriteRateLimit } from "./rate-limit";
 import type { Store } from "./store/types";
 import type { Desk } from "./desk/run";
 import { registerStreamsWebhook, type StreamsWebhookDeps } from "./routes/webhooks";
@@ -27,6 +28,7 @@ export async function buildServer(config: ApiConfig, deps: ServerDeps): Promise<
   const gemini = deps.gemini ?? createGeminiAdapter(createGeminiClient(config.gemini));
   const app = Fastify({ logger: true });
   await app.register(cors, { origin: config.corsOrigin });
+  registerWriteRateLimit(app, config.writeRateLimit);
 
   registerHealthRoute(app);
   registerMarketRoutes(app, gemini, config.hedge);

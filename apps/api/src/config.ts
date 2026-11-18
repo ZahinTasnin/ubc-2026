@@ -6,6 +6,8 @@ export interface ApiConfig {
   hedge: { maxQuoteAgeMs: number; feeBps: number };
   /** Server-only. null = in-memory store (not durable). */
   supabase: { url: string; serviceRoleKey: string } | null;
+  /** Per-IP limit on POST requests (webhooks exempt). */
+  writeRateLimit: { maxPerWindow: number; windowMs: number };
   /** Exposure desk (simulated netting across shops). */
   desk: { lotContracts: number; rebalanceMs: number };
   workers: {
@@ -45,6 +47,13 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): ApiConfig {
       env.SUPABASE_URL && env.SUPABASE_SERVICE_ROLE_KEY
         ? { url: env.SUPABASE_URL, serviceRoleKey: env.SUPABASE_SERVICE_ROLE_KEY }
         : null,
+    writeRateLimit: {
+      maxPerWindow: Math.max(
+        1,
+        nonNegativeInt(env.WRITE_RATE_LIMIT_PER_MIN, 30, "WRITE_RATE_LIMIT_PER_MIN"),
+      ),
+      windowMs: 60_000,
+    },
     desk: {
       lotContracts: Math.max(1, nonNegativeInt(env.DESK_LOT_CONTRACTS, 10, "DESK_LOT_CONTRACTS")),
       rebalanceMs: nonNegativeInt(env.DESK_REBALANCE_MS, 15_000, "DESK_REBALANCE_MS"),
