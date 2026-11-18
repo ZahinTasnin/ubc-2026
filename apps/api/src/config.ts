@@ -11,8 +11,9 @@ export interface ApiConfig {
      * Which SolanaServerGateway backs the workers:
      * - "none": API only, no background workers (default until Dev 3's gateway lands)
      * - "fake": IN-MEMORY fake chain + in-memory store, for local testing only (not Solana)
+     * - "arc":  the Arc testnet escrow via @hedged/arc (env ARC_*; packages/arc/README.md)
      */
-    gateway: "none" | "fake";
+    gateway: "none" | "fake" | "arc";
     resolvePollMs: number;
     reconcileMs: number;
     hedgeWindowFraction: number;
@@ -59,9 +60,9 @@ function nonNegativeInt(raw: string | undefined, fallback: number, name: string)
   return n;
 }
 
-function parseGatewayMode(raw: string | undefined): "none" | "fake" {
+function parseGatewayMode(raw: string | undefined): "none" | "fake" | "arc" {
   const mode = raw || "none";
-  if (mode === "none" || mode === "fake") return mode;
+  if (mode === "none" || mode === "fake" || mode === "arc") return mode;
   throw new Error(
     `SOLANA_GATEWAY=${mode} is not supported yet (real @hedged/solana gateway pending); use none or fake`,
   );

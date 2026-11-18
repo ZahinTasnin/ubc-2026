@@ -13,6 +13,7 @@
   },
   "dependencies": {
     "@fastify/cors": "^11.0.0",
+    "@hedged/arc": "workspace:*",
     "@hedged/shared": "workspace:*",
     "@hedged/solana": "workspace:*",
     "@supabase/supabase-js": "^2.119.0",

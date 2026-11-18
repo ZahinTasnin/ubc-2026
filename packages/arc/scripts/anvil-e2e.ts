@@ -189,12 +189,14 @@ async function main() {
     await new Promise((r) => setTimeout(r, 500));
     cfg = await gw.getConfig();
   }
+  const eq = (a?: string, b?: string) => Boolean(a && b && a.toLowerCase() === b.toLowerCase());
   check(
-    cfg?.relayer === relayer.address &&
-      cfg.mint === usdc &&
-      cfg.admin === admin.address &&
-      !cfg.paused,
+    eq(cfg?.relayer, relayer.address) &&
+      eq(cfg?.mint, usdc) &&
+      eq(cfg?.admin, admin.address) &&
+      cfg?.paused === false,
     "getConfig mirrors the constructor",
+    cfg,
   );
 
   // subscribers (from block 0 = full replay semantics)

@@ -1,3 +1,4 @@
+import { createArcGatewayFromEnv } from "@hedged/arc/server";
 import { loadConfig } from "./config";
 import { createGeminiAdapter } from "./gemini/adapter";
 import { createGeminiClient } from "./gemini/client";
@@ -15,9 +16,11 @@ const store: Store = config.supabase
   ? createSupabaseStore(config.supabase.url, config.supabase.serviceRoleKey)
   : new MemoryStore();
 const gateway =
-  config.workers.gateway === "fake"
-    ? new FakeSolanaGateway(() => Math.floor(Date.now() / 1000))
-    : null;
+  config.workers.gateway === "arc"
+    ? await createArcGatewayFromEnv()
+    : config.workers.gateway === "fake"
+      ? new FakeSolanaGateway(() => Math.floor(Date.now() / 1000))
+      : null;
 const app = await buildServer(config, { gemini, store, gateway });
 if (config.supabase) {
   app.log.info({ supabase: new URL(config.supabase.url).host }, "using Supabase store");
@@ -31,9 +34,13 @@ try {
   await app.listen({ host: config.host, port: config.port });
 
   if (gateway) {
-    app.log.warn(
-      "SOLANA_GATEWAY=fake: workers run against an IN-MEMORY FAKE chain. Not Solana. Local testing only.",
-    );
+    if (config.workers.gateway === "fake") {
+      app.log.warn(
+        "SOLANA_GATEWAY=fake: workers run against an IN-MEMORY FAKE chain. Not Solana. Local testing only.",
+      );
+    } else {
+      app.log.info("SOLANA_GATEWAY=arc: workers run against the Arc escrow (@hedged/arc)");
+    }
     const orchestrator = createOrchestrator({
       store,
       gateway,

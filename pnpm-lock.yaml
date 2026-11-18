@@ -59,6 +59,9 @@ importers:
       '@fastify/cors':
         specifier: ^11.0.0
         version: 11.4.3
+      '@hedged/arc':
+        specifier: workspace:*
+        version: link:../../packages/arc
       '@hedged/shared':
         specifier: workspace:*
         version: link:../../packages/shared
