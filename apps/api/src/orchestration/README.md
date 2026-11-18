@@ -16,8 +16,12 @@ resolution poll every `RESOLVE_POLL_MS` (default 5 s), and a reconciliation swee
 `RECONCILE_MS` (default 60 s, plus once at boot). `index.ts` starts it based on `SOLANA_GATEWAY`:
 
 - `none` (default): API only, no workers.
-- `fake`: workers on `fake-gateway.ts`, an **in-memory fake** chain + `MemoryStore`. Not Solana,
-  not durable; local testing only. The real Devnet gateway (Dev 3) is not wired yet.
+- `fake`: workers on `fake-gateway.ts`, an **in-memory fake** chain. Not Solana; local testing only.
+- `real`: workers on Dev 3's `RealSolanaGateway` (Solana Devnet), created by
+  `createSolanaGatewayFromEnv` from `SOLANA_*` / `QUICKNODE_*` / `RELAYER_*`. The relayer keypair
+  must be `Config.relayer` on-chain. With `QUICKNODE_STREAMS_SECURITY_TOKEN` set, QuickNode Streams
+  deliveries are accepted at `POST /webhooks/quicknode` (HMAC-checked over the raw body, then
+  re-verified on-chain by the gateway before any handler runs).
 
 ## CLAUDE.md §5.1 coverage (simulated hedge; `orchestrator.test.ts`, in-memory store)
 

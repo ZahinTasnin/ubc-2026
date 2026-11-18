@@ -12,9 +12,13 @@ export interface ApiConfig {
     /**
      * Which SolanaServerGateway backs the workers:
      * - "none": API only, no background workers (default until Dev 3's gateway lands)
-     * - "fake": IN-MEMORY fake chain + in-memory store, for local testing only (not Solana)
+     * - "fake": IN-MEMORY fake chain, for local testing only (not Solana)
+     * - "real": Dev 3's Devnet gateway (@hedged/solana/server), configured from the SOLANA_*,
+     *           QUICKNODE_* and RELAYER_* variables
      */
-    gateway: "none" | "fake";
+    gateway: "none" | "fake" | "real";
+    /** QuickNode Streams HMAC token; enables POST /webhooks/quicknode in "real" mode. */
+    streamsSecurityToken: string | null;
     resolvePollMs: number;
     reconcileMs: number;
     hedgeWindowFraction: number;
@@ -47,6 +51,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): ApiConfig {
     },
     workers: {
       gateway: parseGatewayMode(env.SOLANA_GATEWAY),
+      streamsSecurityToken: env.QUICKNODE_STREAMS_SECURITY_TOKEN || null,
       resolvePollMs: nonNegativeInt(env.RESOLVE_POLL_MS, 5000, "RESOLVE_POLL_MS"),
       reconcileMs: nonNegativeInt(env.RECONCILE_MS, 60_000, "RECONCILE_MS"),
       hedgeWindowFraction: 0.7,
@@ -65,10 +70,8 @@ function nonNegativeInt(raw: string | undefined, fallback: number, name: string)
   return n;
 }
 
-function parseGatewayMode(raw: string | undefined): "none" | "fake" {
+function parseGatewayMode(raw: string | undefined): "none" | "fake" | "real" {
   const mode = raw || "none";
-  if (mode === "none" || mode === "fake") return mode;
-  throw new Error(
-    `SOLANA_GATEWAY=${mode} is not supported yet (real @hedged/solana gateway pending); use none or fake`,
-  );
+  if (mode === "none" || mode === "fake" || mode === "real") return mode;
+  throw new Error(`Invalid SOLANA_GATEWAY=${mode}: use none, fake or real`);
 }
