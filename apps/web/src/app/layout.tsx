@@ -4,8 +4,9 @@ import { SolanaProvider } from "@/components/solana-provider";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Hedged Refund Promotions (Devnet demo)",
-  description: "Simulation-first conditional refunds on Solana Devnet. Test tokens only.",
+  title: "Wincentive",
+  description:
+    "Outcome-based refund promotions for merchants, informed by prediction-market prices. A Solana Devnet demo with valueless test tokens and simulated hedging.",
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {

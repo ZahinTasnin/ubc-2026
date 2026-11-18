@@ -4,6 +4,8 @@ import Link from "next/link";
 import { useState, type ReactNode } from "react";
 import { DevnetBanner } from "@/components/devnet-banner";
 import { MOCK_USD_DECIMALS, type PriceMicroUsd, type TokenBaseUnits } from "@hedged/shared";
+import { DevnetNetworkNotice } from "@/components/wallet/DevnetNetworkNotice";
+import { WalletButton } from "@/components/wallet-button";
 import { formatTokenAmount } from "@/lib/format";
 
 // Draft configuration UI only. Form values live in React state. "Save Demo Draft" validates every
@@ -61,6 +63,23 @@ function requiredText(value: string, label: string): string | undefined {
   return value.trim() === "" ? `${label} is required.` : undefined;
 }
 
+/** The Anchor program's MAX_MARKET_ID_LEN (programs/escrow/src/state/mod.rs). Rust `len()` counts UTF-8 bytes. */
+const MAX_MARKET_ID_BYTES = 64;
+
+/**
+ * Market ID: required, and at most 64 UTF-8 BYTES (not characters) because the program stores it
+ * on-chain. The trimmed value is measured, since that is what the draft saves. Existence of the
+ * market is NOT checked here (that needs the backend).
+ */
+function marketIdError(value: string): string | undefined {
+  const required = requiredText(value, "Gemini market ID");
+  if (required) return required;
+  const bytes = new TextEncoder().encode(value.trim()).length;
+  return bytes > MAX_MARKET_ID_BYTES
+    ? `Market ID must be ${MAX_MARKET_ID_BYTES} bytes or fewer (this one is ${bytes}).`
+    : undefined;
+}
+
 /**
  * Checks a decimal string. Returns an error message, or the parsed parts when valid.
  * Works on the string itself so no money is ever rounded by floating-point math.
@@ -79,12 +98,32 @@ function parseDecimal(
   return { whole: whole.replace(/^0+/, ""), frac };
 }
 
-/** Amount > 0 with at most 6 decimals (purchase price, budget). */
+/**
+ * Largest token amount in base units: u64::MAX.
+ * - Purchase price: the program stores it as `Promo.offer_amount: u64` (initialize_promo / deposit).
+ * - Promotion budget: off-chain only (no on-chain field), but it is denominated in the same SPL
+ *   token, whose amounts are u64 base units, so the same ceiling is used.
+ */
+const MAX_U64 = 18446744073709551615n;
+const MAX_U64_DISPLAY = (() => {
+  const digits = MAX_U64.toString();
+  return `${digits.slice(0, -MOCK_USD_DECIMALS)}.${digits.slice(-MOCK_USD_DECIMALS)}`;
+})();
+
+/**
+ * Amount > 0 with at most 6 decimals and at most u64::MAX base units (purchase price, budget).
+ * The limit is checked with BigInt on the exact base-unit value. Too-large amounts are rejected,
+ * never clamped.
+ */
 function positiveAmount(raw: string, label: string): string | undefined {
   const parsed = parseDecimal(raw, label);
   if ("error" in parsed) return parsed.error;
   // Greater than zero means at least one non-zero digit somewhere.
-  return /[1-9]/.test(parsed.whole + parsed.frac) ? undefined : `${label} must be greater than 0.`;
+  if (!/[1-9]/.test(parsed.whole + parsed.frac)) return `${label} must be greater than 0.`;
+  if (BigInt(decimalToBaseUnits(raw)) > MAX_U64) {
+    return `${label} is too large. The maximum is ${MAX_U64_DISPLAY}.`;
+  }
+  return undefined;
 }
 
 /**
@@ -144,7 +183,7 @@ function validate(form: FormValues): FormErrors {
     name: requiredText(form.name, "Promotion name"),
     description: requiredText(form.description, "Description"),
     price: positiveAmount(form.price, "Purchase price"),
-    marketId: requiredText(form.marketId, "Gemini market ID"),
+    marketId: marketIdError(form.marketId),
     refundTrigger: requiredText(form.refundTrigger, "Refund trigger"),
     maxHedgePrice: hedgePrice(form.maxHedgePrice),
     budget: positiveAmount(form.budget, "Promotion budget"),
@@ -153,7 +192,7 @@ function validate(form: FormValues): FormErrors {
 }
 
 const INPUT_BASE =
-  "mt-2 block w-full rounded-lg border bg-white px-3 py-2 text-sm text-stone-900 placeholder:text-stone-400 focus:outline-none focus:ring-2";
+  "mt-2 block w-full rounded-lg border bg-white px-3 py-2 text-base text-stone-900 placeholder:text-stone-500 sm:text-sm focus:outline-none focus:ring-2";
 const INPUT_OK = "border-stone-300 focus:border-violet-500 focus:ring-violet-200";
 const INPUT_INVALID = "border-red-400 focus:border-red-500 focus:ring-red-100";
 
@@ -312,7 +351,7 @@ export default function NewPromotionPage() {
       <main className="mx-auto max-w-3xl px-4 py-10 sm:px-6 sm:py-14">
         <Link
           href="/merchant"
-          className="text-sm font-medium text-violet-800 underline-offset-4 hover:underline"
+          className="-my-3 inline-flex min-h-11 items-center text-sm font-medium text-violet-800 underline-offset-4 hover:underline"
         >
           ← Back to Dashboard
         </Link>
@@ -325,9 +364,22 @@ export default function NewPromotionPage() {
           <h1 className="mt-5 text-3xl font-semibold tracking-tight text-stone-900 sm:text-4xl">
             Create Promotion
           </h1>
-          <p className="mt-3 inline-block rounded-full bg-orange-100 px-3 py-1 text-xs font-medium text-orange-800">
-            Draft configuration · not published
+          {/* The wallet button is deliberately in the header, OUTSIDE the <form>, so it can never
+              submit the form. It is optional: drafts save without a wallet, and connecting does
+              not publish anything or prove the wallet is on Devnet or authorized as a merchant. */}
+          <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
+            <p className="rounded-full bg-orange-100 px-3 py-1 text-xs font-medium text-orange-800">
+              Draft configuration · not published
+            </p>
+            <WalletButton />
+          </div>
+          <p className="mt-2 text-xs leading-relaxed text-stone-500 sm:text-right">
+            Wallet connection will be used for future on-chain promotion creation. It is optional,
+            and connecting does not publish anything.
           </p>
+          {/* Read-only status. A verified Devnet RPC says nothing about the wallet's own network
+              (the notice itself shows that as "Not verified"). Also outside the <form>. */}
+          <DevnetNetworkNotice />
           <p className="mt-3 max-w-2xl text-base leading-relaxed text-stone-600">
             Configure an outcome-based refund offer for any product or service. Hedging against the
             Gemini prediction market is <strong>simulated</strong>: no real orders are placed and no
@@ -508,11 +560,13 @@ export default function NewPromotionPage() {
 
             <div className="px-5 py-6 sm:px-6">
               <h3 className="break-words text-2xl font-semibold tracking-tight text-stone-900">
-                {form.name.trim() || <span className="text-stone-400">Your promotion name</span>}
+                {form.name.trim() || (
+                  <span className="italic text-stone-600">Your promotion name</span>
+                )}
               </h3>
               <p className="mt-2 whitespace-pre-line break-words text-sm leading-relaxed text-stone-600">
                 {form.description.trim() || (
-                  <span className="text-stone-400">
+                  <span className="italic text-stone-600">
                     A description of the product or service will appear here.
                   </span>
                 )}
@@ -524,7 +578,7 @@ export default function NewPromotionPage() {
                     Purchase price
                   </dt>
                   <dd className="mt-1 text-2xl font-semibold text-violet-900">
-                    {previewPrice(form.price) ?? <span className="text-stone-300">—</span>}
+                    {previewPrice(form.price) ?? <span className="text-stone-500">—</span>}
                   </dd>
                   <dd className="mt-1 text-xs text-stone-500">mock USDC (Devnet test tokens)</dd>
                 </div>
@@ -537,7 +591,7 @@ export default function NewPromotionPage() {
                     {form.refundTrigger.trim() ? (
                       <strong className="font-semibold">{form.refundTrigger.trim()}</strong>
                     ) : (
-                      <span className="text-stone-400">your refund trigger happens</span>
+                      <span className="italic text-stone-600">your refund trigger happens</span>
                     )}
                     , you receive your purchase amount back.
                   </dd>

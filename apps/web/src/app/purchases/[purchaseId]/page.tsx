@@ -2,6 +2,8 @@ import Link from "next/link";
 import type { PurchaseStatus, TokenBaseUnits } from "@hedged/shared";
 import { DevnetBanner } from "@/components/devnet-banner";
 import { StatusBadge } from "@/components/ui/StatusBadge";
+import { DevnetNetworkNotice } from "@/components/wallet/DevnetNetworkNotice";
+import { WalletButton } from "@/components/wallet-button";
 import { DEMO_PROMOTION } from "@/lib/fixtures/promotions";
 import { DEMO_PURCHASE } from "@/lib/fixtures/purchases";
 import { formatTokenAmount } from "@/lib/format";
@@ -272,6 +274,31 @@ export default async function PurchaseReceiptPage({
           <p className="mt-1 text-sm leading-relaxed text-stone-600">
             Eligible customers will claim their mock USDC refund through a Solana wallet.
           </p>
+
+          {/* Existing wallet adapter UI (connect / disconnect). Optional and separate from the claim
+              action below: connecting never enables Claim Refund, and a connected wallet is not
+              proof of refund eligibility or of owning this purchase. */}
+          <div className="mt-4 rounded-lg bg-stone-50 p-4">
+            <p className="text-xs font-semibold uppercase tracking-wide text-stone-500">
+              Wallet (optional)
+            </p>
+            <div className="mt-2">
+              <WalletButton />
+            </div>
+            <p className="mt-2 text-xs leading-relaxed text-stone-600">
+              Connect your Solana wallet to claim eligible refunds when settlement is available.
+              Connecting does not enable a claim and is not proof of refund eligibility or of owning
+              this purchase.
+            </p>
+          </div>
+
+          {/* Read-only status of the app's RPC network. "Verified: Devnet" is NOT proof that the
+              wallet is on Devnet or that a refund can be claimed, and it has no effect on the
+              disabled Claim Refund button below. */}
+          <div className="max-w-md">
+            <DevnetNetworkNotice />
+          </div>
+
           <button
             type="button"
             disabled

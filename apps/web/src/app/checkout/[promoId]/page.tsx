@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { DevnetBanner } from "@/components/devnet-banner";
+import { DevnetNetworkNotice } from "@/components/wallet/DevnetNetworkNotice";
 import { WalletButton } from "@/components/wallet-button";
 import { DEMO_PROMOTION } from "@/lib/fixtures/promotions";
 import { DEMO_PURCHASE } from "@/lib/fixtures/purchases";
@@ -150,6 +151,7 @@ export default async function CheckoutPage({ params }: { params: Promise<{ promo
           <div className="mt-4">
             <WalletButton />
           </div>
+          <DevnetNetworkNotice />
         </section>
 
         {/* How it works */}

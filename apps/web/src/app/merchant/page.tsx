@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { DevnetBanner } from "@/components/devnet-banner";
 import { SavedDraftCard } from "@/components/merchant/SavedDraftCard";
+import { WalletButton } from "@/components/wallet-button";
 import { DEMO_PROMOTION } from "@/lib/fixtures/promotions";
 import { formatTokenAmount } from "@/lib/format";
 
@@ -54,22 +55,37 @@ export default function MerchantPage() {
               outcome goes their way, while tracking how the promotion is modeled to be hedged.
             </p>
           </div>
-          {/* Navigation only. Nothing is created, published or claimed by clicking these. */}
-          <nav aria-label="Merchant actions" className="flex shrink-0 flex-wrap items-center gap-3">
-            <Link
-              href="/merchant/new"
-              className="inline-flex items-center justify-center gap-2 rounded-lg bg-violet-700 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-violet-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-500"
+          <div className="flex shrink-0 flex-col gap-4 sm:items-end">
+            {/* Navigation only. Nothing is created, published or claimed by clicking these. */}
+            <nav
+              aria-label="Merchant actions"
+              className="flex shrink-0 flex-wrap items-center gap-3"
             >
-              <span aria-hidden className="h-2 w-2 rounded-sm bg-orange-400" />
-              Create Promotion
-            </Link>
-            <Link
-              href="/merchant/claims"
-              className="inline-flex items-center justify-center rounded-lg border border-stone-300 bg-white px-4 py-2.5 text-sm font-semibold text-violet-800 transition-colors hover:border-violet-300 hover:bg-violet-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-500"
-            >
-              Merchant Claims
-            </Link>
-          </nav>
+              <Link
+                href="/merchant/new"
+                className="inline-flex items-center justify-center gap-2 rounded-lg bg-violet-700 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-violet-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-500"
+              >
+                <span aria-hidden className="h-2 w-2 rounded-sm bg-orange-400" />
+                Create Promotion
+              </Link>
+              <Link
+                href="/merchant/claims"
+                className="inline-flex items-center justify-center rounded-lg border border-stone-300 bg-white px-4 py-2.5 text-sm font-semibold text-violet-800 transition-colors hover:border-violet-300 hover:bg-violet-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-500"
+              >
+                Merchant Claims
+              </Link>
+            </nav>
+
+            {/* Existing wallet adapter UI (connect / disconnect). Optional: the dashboard and demo
+                work without it, and a connected wallet is not proof of owning any promotion. */}
+            <div className="flex flex-col gap-1.5 sm:items-end">
+              <WalletButton />
+              <p className="max-w-xs text-xs leading-relaxed text-stone-500 sm:text-right">
+                Connect a Solana Devnet wallet for future merchant transactions. Optional;
+                connecting does not prove ownership of any promotion.
+              </p>
+            </div>
+          </div>
         </header>
 
         {/* Overview */}

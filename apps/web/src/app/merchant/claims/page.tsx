@@ -2,6 +2,8 @@ import Link from "next/link";
 import { DevnetBanner } from "@/components/devnet-banner";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { DEMO_PROMOTION } from "@/lib/fixtures/promotions";
+import { DevnetNetworkNotice } from "@/components/wallet/DevnetNetworkNotice";
+import { WalletButton } from "@/components/wallet-button";
 import { DEMO_PURCHASE } from "@/lib/fixtures/purchases";
 import { formatTokenAmount } from "@/lib/format";
 
@@ -42,24 +44,42 @@ export default function MerchantClaimsPage() {
 
       <main className="mx-auto max-w-5xl px-4 py-10 sm:px-6 sm:py-14">
         {/* Header */}
-        <header className="border-b border-stone-200 pb-8">
-          <Link href="/" className="inline-flex items-center gap-2 text-sm font-semibold">
-            <span aria-hidden className="h-2.5 w-2.5 rounded-sm bg-orange-500" />
-            <span className="tracking-tight text-violet-900">Wincentive</span>
-          </Link>
-          <h1 className="mt-5 text-3xl font-semibold tracking-tight text-stone-900 sm:text-4xl">
-            Merchant Claims
-          </h1>
-          <p className="mt-3 max-w-2xl text-base leading-relaxed text-stone-600">
-            Review settled purchases and claim escrowed test tokens when the refund condition does
-            not occur.
-          </p>
-          <Link
-            href="/merchant"
-            className="mt-4 inline-block text-sm font-medium text-violet-800 underline-offset-4 hover:underline"
-          >
-            ← Back to Merchant Dashboard
-          </Link>
+        <header className="flex flex-col gap-6 border-b border-stone-200 pb-8 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <Link href="/" className="inline-flex items-center gap-2 text-sm font-semibold">
+              <span aria-hidden className="h-2.5 w-2.5 rounded-sm bg-orange-500" />
+              <span className="tracking-tight text-violet-900">Wincentive</span>
+            </Link>
+            <h1 className="mt-5 text-3xl font-semibold tracking-tight text-stone-900 sm:text-4xl">
+              Merchant Claims
+            </h1>
+            <p className="mt-3 max-w-2xl text-base leading-relaxed text-stone-600">
+              Review settled purchases and claim escrowed test tokens when the refund condition does
+              not occur.
+            </p>
+            <Link
+              href="/merchant"
+              className="mt-4 inline-block text-sm font-medium text-violet-800 underline-offset-4 hover:underline"
+            >
+              ← Back to Merchant Dashboard
+            </Link>
+          </div>
+
+          {/* Existing wallet adapter UI (connect / disconnect). Optional: this page and its demo row
+              work without it. Claim Funds stays disabled whether or not a wallet is connected. */}
+          <div className="flex shrink-0 flex-col gap-1.5 sm:items-end">
+            <WalletButton />
+            <p className="max-w-xs text-xs leading-relaxed text-stone-500 sm:text-right">
+              Merchants will use their wallets for future claims. Connecting is optional and does
+              not enable any claim.
+            </p>
+            {/* Read-only status of the app's RPC network. A verified Devnet RPC is NOT proof of
+                merchant authorization or claim eligibility, and says nothing about the wallet's
+                own network. It has no effect on the disabled Claim Funds button. */}
+            <div className="w-full sm:max-w-sm">
+              <DevnetNetworkNotice />
+            </div>
+          </div>
         </header>
 
         {/* Settlement overview */}
