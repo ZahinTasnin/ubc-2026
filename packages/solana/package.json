@@ -9,14 +9,25 @@
   },
   "scripts": {
     "typecheck": "tsc -p tsconfig.json",
-    "build": "tsc -p tsconfig.json"
+    "build": "tsc -p tsconfig.json",
+    "test": "tsx --test \"src/**/*.test.ts\"",
+    "test:localnet": "tsx scripts/localnet-e2e.ts",
+    "devnet:read": "tsx scripts/devnet-read.ts",
+    "relayer:set": "tsx scripts/set-relayer.ts",
+    "streams:create": "tsx scripts/create-stream.ts",
+    "streams:webhook": "tsx scripts/streams-webhook.ts"
   },
   "dependencies": {
+    "@coral-xyz/anchor": "0.32.1",
     "@hedged/shared": "workspace:*",
-    "@solana/web3.js": "^1.99.0"
+    "@solana/spl-token": "^0.4.15",
+    "@solana/web3.js": "^1.99.0",
+    "bn.js": "^5.2.5"
   },
   "devDependencies": {
-    "typescript": "~5.9.3",
-    "@types/node": "^22.10.0"
+    "@types/bn.js": "^5.2.0",
+    "@types/node": "^22.10.0",
+    "tsx": "^4.23.15",
+    "typescript": "~5.9.3"
   }
 }

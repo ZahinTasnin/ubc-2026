@@ -4,6 +4,8 @@
  */
 export * from "./config";
 export * from "./errors";
+export * from "./idl";
 export * from "./pda";
+export * from "./codec";
 export * from "./accounts";
 export * from "./transactions";
