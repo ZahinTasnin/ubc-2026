@@ -79,6 +79,13 @@ The hedge fixes the promo's cost at `p × R`; it does not make the promo free. `
 market-implied probability of the refund, so the cost behaves like a discount of `p` that the
 customer experiences as a chance at a free item.
 
+**Exposure desk (platform level).** Shops pay the live per-sale price, but the platform does not
+hedge each sale separately. It nets exposure across all shops per Gemini event: on a game where some
+shops promise "free if Texas wins" and others "free if Arkansas wins", the amount owed whichever team
+wins is covered by the premiums collected, and only the remainder is hedged, in batches. The
+difference is platform revenue (in the tested example: $487 of premiums, $184 of hedging, covered in
+both outcomes). See `apps/api/src/desk/README.md`.
+
 **Merchant controls.** A threshold (maximum YES price, i.e. maximum cost as a share of the price),
 a total hedge budget, and a deposit deadline. Each sale is priced at the moment it happens; when the
 live price is above the threshold or the budget is used up, the promo shows as paused and checkout

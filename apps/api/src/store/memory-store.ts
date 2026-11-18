@@ -8,8 +8,10 @@ import {
 import {
   BudgetExceededError,
   PromotionConflictError,
+  type DeskFillRow,
   type HedgeRow,
   type MerchantRow,
+  type NewDeskFill,
   type NewHedge,
   type NewPromotion,
   type PromotionRow,
@@ -32,6 +34,24 @@ export class MemoryStore implements Store {
   readonly events = new Set<string>();
   readonly checkpoints = new Map<string, number>();
   readonly merchants = new Map<string, MerchantRow>();
+  readonly deskFills: DeskFillRow[] = [];
+
+  async recordDeskFill(f: NewDeskFill): Promise<DeskFillRow> {
+    const row: DeskFillRow = {
+      ...f,
+      id: randomUUID(),
+      simulated: true,
+      createdAt: new Date().toISOString(),
+    };
+    this.deskFills.push(row);
+    return { ...row };
+  }
+
+  async listDeskFills(eventTicker?: string) {
+    return this.deskFills
+      .filter((f) => !eventTicker || f.eventTicker === eventTicker)
+      .map((f) => ({ ...f }));
+  }
 
   async upsertMerchant(m: Omit<MerchantRow, "createdAt">): Promise<MerchantRow> {
     const existing = this.merchants.get(m.pubkey);

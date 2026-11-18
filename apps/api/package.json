@@ -12,11 +12,15 @@
     "test:db": "tsx --env-file=../../.env --test src/store/store-contract.test.ts"
   },
   "dependencies": {
+    "@coral-xyz/anchor": "0.32.1",
     "@fastify/cors": "^11.0.0",
     "@hedged/arc": "workspace:*",
     "@hedged/shared": "workspace:*",
     "@hedged/solana": "workspace:*",
+    "@solana/spl-token": "^0.4.15",
+    "@solana/web3.js": "^1.99.0",
     "@supabase/supabase-js": "^2.119.0",
+    "bn.js": "^5.2.5",
     "fastify": "^5.12.8"
   },
   "devDependencies": {

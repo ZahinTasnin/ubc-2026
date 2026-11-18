@@ -1,4 +1,5 @@
 import type { SolanaServerGateway, Unsubscribe } from "@hedged/shared";
+import type { Desk } from "../desk/run";
 import type { Store } from "../store/types";
 import type { Logger, Orchestrator } from "./orchestrator";
 
@@ -17,6 +18,9 @@ export interface WorkerOptions {
   log: Logger;
   resolvePollMs: number;
   reconcileMs: number;
+  /** Optional exposure desk, rebalanced every `deskMs`. */
+  desk?: Desk;
+  deskMs?: number;
 }
 
 export interface RunningWorkers {
@@ -82,11 +86,16 @@ export async function startWorkers(opts: WorkerOptions): Promise<RunningWorkers>
     }
   });
 
+  const deskPass = guarded("desk", async () => {
+    await opts.desk?.rebalance();
+  });
+
   await reconcilePass();
   const timers = [
     setInterval(resolvePass, opts.resolvePollMs),
     setInterval(reconcilePass, opts.reconcileMs),
   ];
+  if (opts.desk && opts.deskMs) timers.push(setInterval(deskPass, opts.deskMs));
   log.info({ resolvePollMs: opts.resolvePollMs, reconcileMs: opts.reconcileMs }, "workers started");
 
   return {
@@ -97,6 +106,7 @@ export async function startWorkers(opts: WorkerOptions): Promise<RunningWorkers>
     async tick() {
       await resolvePass();
       await reconcilePass();
+      await deskPass();
     },
   };
 }
