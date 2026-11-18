@@ -6,17 +6,24 @@ import { createOrchestrator } from "./orchestration/orchestrator";
 import { startWorkers, type RunningWorkers } from "./orchestration/workers";
 import { buildServer } from "./server";
 import { MemoryStore } from "./store/memory-store";
+import { createSupabaseStore } from "./store/supabase-store";
+import type { Store } from "./store/types";
 
 const config = loadConfig();
 const gemini = createGeminiAdapter(createGeminiClient(config.gemini));
-// TODO(Dev 4): Supabase-backed Store. Until then everything is in memory and lost on restart.
-const store = new MemoryStore();
+const store: Store = config.supabase
+  ? createSupabaseStore(config.supabase.url, config.supabase.serviceRoleKey)
+  : new MemoryStore();
 const gateway =
   config.workers.gateway === "fake"
     ? new FakeSolanaGateway(() => Math.floor(Date.now() / 1000))
     : null;
 const app = await buildServer(config, { gemini, store, gateway });
-app.log.warn("Using the IN-MEMORY store: data is lost on restart (Supabase store pending).");
+if (config.supabase) {
+  app.log.info({ supabase: new URL(config.supabase.url).host }, "using Supabase store");
+} else {
+  app.log.warn("SUPABASE_URL/SUPABASE_SERVICE_ROLE_KEY not set: IN-MEMORY store, lost on restart");
+}
 
 let workers: RunningWorkers | null = null;
 

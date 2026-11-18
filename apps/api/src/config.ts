@@ -4,6 +4,8 @@ export interface ApiConfig {
   corsOrigin: string;
   gemini: { baseUrl: string; timeoutMs: number };
   hedge: { maxQuoteAgeMs: number; feeBps: number };
+  /** Server-only. null = in-memory store (not durable). */
+  supabase: { url: string; serviceRoleKey: string } | null;
   workers: {
     /**
      * Which SolanaServerGateway backs the workers:
@@ -33,6 +35,10 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): ApiConfig {
       baseUrl: env.GEMINI_API_BASE_URL || "https://api.gemini.com",
       timeoutMs: nonNegativeInt(env.GEMINI_TIMEOUT_MS, 5000, "GEMINI_TIMEOUT_MS"),
     },
+    supabase:
+      env.SUPABASE_URL && env.SUPABASE_SERVICE_ROLE_KEY
+        ? { url: env.SUPABASE_URL, serviceRoleKey: env.SUPABASE_SERVICE_ROLE_KEY }
+        : null,
     workers: {
       gateway: parseGatewayMode(env.SOLANA_GATEWAY),
       resolvePollMs: nonNegativeInt(env.RESOLVE_POLL_MS, 5000, "RESOLVE_POLL_MS"),
