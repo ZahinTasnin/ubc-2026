@@ -105,6 +105,10 @@ stateDiagram-v2
 | `RESOLVED`        | Hedged                           | promo resolved on-chain                        |
 | `CLAIMED`         | ClaimedByCustomer / ByMerchant   | claim tx verified                              |
 
+Implementation: `apps/api/src/orchestration/orchestrator.ts` (tests: `orchestrator.test.ts`).
+Partial simulated fills are released immediately and the purchase is cancelled (an instant retry
+would see the same book). New hedges stop after 70% of the promo's `cancelTimeoutSecs`.
+
 ## Idempotency and races
 
 - **Hedge simulation is persisted once**: `simulated_hedges` has a unique key on `purchase_id`.

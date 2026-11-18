@@ -7,7 +7,9 @@
     "dev": "tsx watch --env-file-if-exists=../../.env src/index.ts",
     "start": "node --env-file-if-exists=../../.env dist/index.js",
     "build": "tsup",
-    "typecheck": "tsc -p tsconfig.json"
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "tsx --test 'src/**/*.test.ts'",
+    "test:db": "tsx --env-file=../../.env --test src/store/store-contract.test.ts"
   },
   "dependencies": {
     "@fastify/cors": "^11.0.0",
