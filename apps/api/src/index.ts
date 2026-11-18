@@ -28,9 +28,17 @@ let gateway: SolanaServerGateway | null = null;
 if (config.workers.gateway === "fake") {
   gateway = new FakeSolanaGateway(() => Math.floor(Date.now() / 1000));
 } else if (config.workers.gateway === "real") {
-  realGateway = await createSolanaGatewayFromEnv(process.env, (msg, extra) =>
-    console.log(JSON.stringify({ level: 30, time: Date.now(), msg: `[solana] ${msg}`, ...extra })),
-  );
+  try {
+    realGateway = await createSolanaGatewayFromEnv(process.env, (msg, extra) =>
+      console.log(
+        JSON.stringify({ level: 30, time: Date.now(), msg: `[solana] ${msg}`, ...extra }),
+      ),
+    );
+  } catch (err) {
+    // Typical causes: RELAYER_KEYPAIR_PATH missing/unreadable, RPC not Devnet, RPC unreachable.
+    console.error(`SOLANA_GATEWAY=real could not start: ${(err as Error).message}`);
+    process.exit(1);
+  }
   gateway = realGateway;
 }
 const streams =
