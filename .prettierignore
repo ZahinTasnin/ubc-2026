@@ -4,3 +4,6 @@ dist
 target
 pnpm-lock.yaml
 CLAUDE.md
+contracts/arc/cache
+contracts/arc/out
+contracts/arc/broadcast
