@@ -48,5 +48,11 @@ pnpm dev:api             # http://localhost:4000/health
 types, typed stubs): deposit ingestion, Gemini adapter, hedge functionality and UI flows are **not
 implemented**. Stubs throw `NotImplementedError` or return HTTP 501 rather than faking behavior.
 
+**Solana infrastructure (Dev 3): implemented** — `packages/solana`: PDAs, reads, wallet transaction
+builders, the relayer-signed `SolanaServerGateway`, verified event subscriptions (replay, dedupe,
+redelivery) and QuickNode RPC + **Streams** (filter, HMAC-verified webhook). Tested against the deployed
+Devnet binary on a local validator (`pnpm --filter @hedged/solana test:localnet`); see
+[packages/solana/README.md](packages/solana/README.md), incl. the Stream configuration.
+
 Docs: [architecture](docs/architecture.md) · [interfaces](docs/interfaces.md) · [workflow](docs/workflow.md) ·
 [ownership](docs/developer-ownership.md) · [setup](docs/setup.md)
