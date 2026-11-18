@@ -1,6 +1,8 @@
 import cors from "@fastify/cors";
 import Fastify, { type FastifyInstance } from "fastify";
 import type { ApiConfig } from "./config";
+import { createGeminiAdapter } from "./gemini/adapter";
+import { createGeminiClient } from "./gemini/client";
 import { registerHealthRoute } from "./routes/health";
 import { registerMarketRoutes } from "./routes/markets";
 import { registerPromotionRoutes } from "./routes/promotions";
@@ -11,8 +13,10 @@ export async function buildServer(config: ApiConfig): Promise<FastifyInstance> {
   const app = Fastify({ logger: true });
   await app.register(cors, { origin: config.corsOrigin });
 
+  const gemini = createGeminiAdapter(createGeminiClient(config.gemini));
+
   registerHealthRoute(app);
-  registerMarketRoutes(app);
+  registerMarketRoutes(app, gemini, config.hedge);
   registerPromotionRoutes(app);
   registerPurchaseRoutes(app);
   registerMerchantRoutes(app);

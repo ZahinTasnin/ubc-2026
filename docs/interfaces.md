@@ -206,23 +206,35 @@ and `claim_merchant`; admin-only instructions (`initialize_config`, `set_paused`
 `set_cancel_timeout`) are ops/scripts (`programs/escrow/scripts`), not part of the app SDK;
 ATAs must be for the configured mint (6 decimals); the UI generates `purchase_id` (16 random bytes).
 
-## 6. API (apps/api, Dev 4 → Dev 1) — all 501 except `/health`
+## 6. API (apps/api, Dev 4 → Dev 1)
 
-`GET /health` · `GET /api/markets` · `GET /api/markets/:id/quote` · `POST /api/promotions` ·
-`GET /api/promotions/:id` · `GET /api/purchases/:id` · `GET /api/merchants/:id/dashboard`.
-Request/response DTOs: **TODO (Dev 4 proposes, Dev 1 agrees; put in `@hedged/shared`)**. Never trust
-client-submitted `HEDGED`, `REFUNDED`, outcome, or price fields; never return simulated data as live.
-Purchase DTOs must expose both the off-chain `status` and the on-chain `state`.
+Live (read-only Gemini, no credentials needed). `:id` is a Gemini contract `instrumentSymbol`,
+e.g. `GEMI-NCAAF-2611212030-ARK-TEX-M-TEX` (= "Texas" contract of Arkansas vs Texas).
+
+- `GET /api/markets?search=&category=&limit=&offset=` → `{ source, totalEvents, markets: MarketSummary[] }`
+- `GET /api/markets/:id/quote?refundAmount=5000000&maxYesPriceMicroUsd=500000` →
+  `{ quote: MarketQuote, eventTicker, eventTitle, outcomeLabel, marketState, estimate }`.
+  `estimate` is a **simulated** hedge (`simulated: true`) when `refundAmount` is given, else null.
+  404 unknown market · 409 market not open · 503 empty book / Gemini unavailable.
+- `GET /api/markets/:id/outcome` → `{ marketId, outcome: MarketOutcome | null }`. Only official
+  Gemini settlement (`status=settled` + `resolutionSide`); `null` until then.
+
+Still 501: `POST /api/promotions` · `GET /api/promotions/:id` · `GET /api/purchases/:id` ·
+`GET /api/merchants/:id/dashboard`. Remaining DTOs: **TODO (Dev 4 proposes, Dev 1 agrees; put in
+`@hedged/shared`)**. Never trust client-submitted `HEDGED`, `REFUNDED`, outcome, or price fields;
+never return simulated data as live. Purchase DTOs must expose both the off-chain `status` and the
+on-chain `state`.
 
 ## 7. Shared types (`@hedged/shared`)
 
-`Promotion`, `Purchase`, `Hedge` (always `simulated: true`), `MarketQuote`, `MarketOutcome`,
-events (`DepositEvent`, `HedgeMarkedEvent`, `PurchaseCancelledEvent`, `ResolutionEvent`,
+`Promotion`, `Purchase`, `Hedge` (always `simulated: true`), `MarketSummary`, `MarketQuote`,
+`MarketOutcome`, events (`DepositEvent`, `HedgeMarkedEvent`, `PurchaseCancelledEvent`, `ResolutionEvent`,
 `ClaimEvent`, `ProgramEvent`, `ChainPosition`, `chainEventId`), on-chain views (`OnChainConfig`,
 `OnChainPromoAccount`, `OnChainPurchaseAccount`), statuses (`OnChainPromoState`,
 `OnChainPurchaseState`, `PurchaseStatus`, `HedgeStatus`), `PDA_SEEDS`, `SolanaServerGateway` and
 its supporting types. Money: integer base units as decimal strings; prices micro-USD
-(`$0.34` = `"340000"`).
+(`$0.34` = `"340000"`). Gemini contract quantities step by 0.01, so `Hedge.requestedContracts` /
+`filledContracts` are decimal strings like `"4.51"`.
 
 ## 8. Business rules: decided and still open
 
