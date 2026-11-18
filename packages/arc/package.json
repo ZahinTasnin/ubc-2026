@@ -1,0 +1,32 @@
+{
+  "name": "@hedged/arc",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./server": "./src/server/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json",
+    "build": "tsc -p tsconfig.json",
+    "test": "tsx --test \"src/**/*.test.ts\"",
+    "abi:sync": "tsx scripts/abi-sync.ts",
+    "test:anvil": "tsx scripts/anvil-e2e.ts",
+    "testnet:read": "tsx scripts/testnet-read.ts",
+    "deploy": "tsx scripts/deploy.ts",
+    "relayer:set": "tsx scripts/set-relayer.ts",
+    "streams:create": "tsx scripts/create-stream.ts",
+    "streams:test-filter": "tsx scripts/test-filter.ts",
+    "streams:webhook": "tsx scripts/streams-webhook.ts"
+  },
+  "dependencies": {
+    "@hedged/shared": "workspace:*",
+    "viem": "^2.58.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "tsx": "^4.23.15",
+    "typescript": "~5.9.3"
+  }
+}
