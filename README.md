@@ -52,6 +52,10 @@ pnpm dev:api             # http://localhost:4000/health
   `docs/interfaces.md` §6. `pnpm --filter @hedged/api test` (in-memory) and `test:db` (Supabase).
 - **Not yet:** the real Devnet `SolanaServerGateway` (Dev 3; until then the backend's workers run only
   on an in-memory fake chain with `SOLANA_GATEWAY=fake`) and the web UI (Dev 1).
+- **Arc version (branch `arc`, experimental):** `contracts/arc` (Solidity port of the escrow, 91
+  Foundry tests) + `packages/arc` (SDK and an Arc `SolanaServerGateway`; `SOLANA_GATEWAY=arc`).
+  Tested on a local chain incl. the backend's real workers; not deployed to Arc testnet yet.
+  See `docs/arc-vs-solana.md`.
 
 ## Economic design
 

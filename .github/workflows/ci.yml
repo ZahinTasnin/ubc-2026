@@ -20,3 +20,10 @@ jobs:
       - run: pnpm build
       - run: pnpm format:check
   # TODO(Dev 2): add an Anchor build/test job once the toolchain is pinned in CI.
+  arc-contracts:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: foundry-rs/foundry-toolchain@v1
+      - run: forge test
+        working-directory: contracts/arc
