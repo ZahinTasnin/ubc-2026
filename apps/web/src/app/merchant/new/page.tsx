@@ -1,12 +1,37 @@
 "use client";
 
+import localFont from "next/font/local";
 import Link from "next/link";
 import { useState, type ReactNode } from "react";
-import { DevnetBanner } from "@/components/devnet-banner";
 import { MOCK_USD_DECIMALS, type PriceMicroUsd, type TokenBaseUnits } from "@hedged/shared";
+import { LogoMark } from "@/components/layout/LogoMark";
+import { SiteHeader } from "@/components/layout/SiteHeader";
 import { DevnetNetworkNotice } from "@/components/wallet/DevnetNetworkNotice";
-import { WalletButton } from "@/components/wallet-button";
 import { formatTokenAmount } from "@/lib/format";
+
+// Page-scoped styling, matching the homepage and the merchant dashboard: same vendored fonts
+// (../../fonts), colors and rhythm. Header, wordmark and the cropped W logo come from
+// src/components/layout (SiteHeader, LogoMark).
+
+const display = localFont({
+  src: "../../fonts/bricolage-grotesque-latin.woff2",
+  weight: "200 800",
+  variable: "--font-display",
+  display: "swap",
+  fallback: ["ui-sans-serif", "system-ui", "sans-serif"],
+});
+const body = localFont({
+  src: "../../fonts/instrument-sans-latin.woff2",
+  weight: "400 700",
+  variable: "--font-body",
+  display: "swap",
+  fallback: ["ui-sans-serif", "system-ui", "sans-serif"],
+});
+
+const DISPLAY = "font-[family-name:var(--font-display)]";
+const FOCUS =
+  "focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#6133A7] focus-visible:rounded-sm";
+const BRAND_HAIRLINE = "bg-[linear-gradient(90deg,#6133A7,#B13BD8_38%,#F5539C_62%,#F58C38)]";
 
 // Draft configuration UI only. Form values live in React state. "Save Demo Draft" validates every
 // field and stores a frontend-only record in this browser tab's sessionStorage. Nothing is sent to
@@ -191,10 +216,11 @@ function validate(form: FormValues): FormErrors {
   };
 }
 
+// 16px on mobile (no iOS focus-zoom), 14px from sm up. Placeholder text is >= 4.5:1 on white.
 const INPUT_BASE =
-  "mt-2 block w-full rounded-lg border bg-white px-3 py-2 text-base text-stone-900 placeholder:text-stone-500 sm:text-sm focus:outline-none focus:ring-2";
-const INPUT_OK = "border-stone-300 focus:border-violet-500 focus:ring-violet-200";
-const INPUT_INVALID = "border-red-400 focus:border-red-500 focus:ring-red-100";
+  "mt-2 block w-full rounded-[10px] border bg-white px-3.5 py-2.5 text-base text-[#211D28] placeholder:text-[#6B6575] sm:text-sm focus:outline-none focus:ring-2";
+const INPUT_OK = "border-[#CFC8BC] focus:border-[#6133A7] focus:ring-[#6133A7]/20";
+const INPUT_INVALID = "border-[#C4372B] focus:border-[#C4372B] focus:ring-[#C4372B]/20";
 
 function Field({
   id,
@@ -211,36 +237,57 @@ function Field({
 }) {
   return (
     <div>
-      <label htmlFor={id} className="block text-sm font-medium text-stone-900">
+      <label htmlFor={id} className="block text-sm font-semibold text-[#211D28]">
         {label}
       </label>
       {children}
       {error && (
-        <p id={`${id}-error`} className="mt-1.5 text-xs font-medium text-red-700">
+        <p id={`${id}-error`} className="mt-1.5 text-xs font-semibold text-[#B3261E]">
           {error}
         </p>
       )}
-      <p id={`${id}-help`} className="mt-1.5 text-xs leading-relaxed text-stone-500">
+      <p id={`${id}-help`} className="mt-1.5 text-xs leading-relaxed text-[#5A5463]">
         {help}
       </p>
     </div>
   );
 }
 
-function Section({
+/** One numbered step of the form: a ruled section with a large numeral, not a card. */
+function Step({
+  n,
   title,
   intro,
   children,
 }: {
+  n: string;
   title: string;
   intro: string;
   children: ReactNode;
 }) {
   return (
-    <section className="rounded-xl border border-stone-200 bg-white p-5 shadow-sm sm:p-6">
-      <h2 className="text-lg font-semibold text-stone-900">{title}</h2>
-      <p className="mt-1 text-sm text-stone-600">{intro}</p>
-      <div className="mt-5 grid gap-5 sm:grid-cols-2">{children}</div>
+    <section
+      aria-labelledby={`step-${n}-heading`}
+      className="border-t border-[#E6E1D8] py-9 first:border-t-2 first:border-[#211D28]"
+    >
+      <div className="flex items-baseline gap-4">
+        <span
+          aria-hidden
+          className={`${DISPLAY} text-[2.6rem] font-light leading-none tracking-[-0.05em] tabular-nums text-[#6133A7]`}
+        >
+          {n}
+        </span>
+        <div>
+          <h2
+            id={`step-${n}-heading`}
+            className={`${DISPLAY} text-[1.5rem] font-semibold leading-tight tracking-[-0.025em]`}
+          >
+            {title}
+          </h2>
+          <p className="mt-1 text-[15px] leading-relaxed text-[#5A5463]">{intro}</p>
+        </div>
+      </div>
+      <div className="mt-7 grid gap-x-6 gap-y-6 sm:grid-cols-2">{children}</div>
     </section>
   );
 }
@@ -306,9 +353,9 @@ export default function NewPromotionPage() {
       "name",
       "description",
       "price",
-      "expiresAt",
       "marketId",
       "refundTrigger",
+      "expiresAt",
       "maxHedgePrice",
       "budget",
     ];
@@ -345,268 +392,355 @@ export default function NewPromotionPage() {
   };
 
   return (
-    <div className="min-h-screen bg-stone-50">
-      <DevnetBanner />
+    <div
+      className={`${display.variable} ${body.variable} min-h-screen bg-[#FAF9F6] font-[family-name:var(--font-body)] text-[#211D28] antialiased`}
+    >
+      {/* Quiet disclosure strip (the full disclosure is in the footer) */}
+      <p className="bg-[#EFE9F8] px-4 py-2 text-center text-xs font-medium text-[#3F2A66]">
+        Devnet demo with valueless test tokens. Hedging is simulated.
+      </p>
 
-      <main className="mx-auto max-w-3xl px-4 py-10 sm:px-6 sm:py-14">
-        <Link
-          href="/merchant"
-          className="-my-3 inline-flex min-h-11 items-center text-sm font-medium text-violet-800 underline-offset-4 hover:underline"
-        >
-          ← Back to Dashboard
-        </Link>
+      {/* Shared header. Its wallet button sits OUTSIDE the <form>, so it can never submit the form. It is
+          optional: drafts save without a wallet, and connecting does not publish anything or prove the
+          wallet is on Devnet or authorized as a merchant. */}
+      <SiteHeader current="promotions" />
 
-        <header className="mt-5 border-b border-stone-200 pb-8">
-          <span className="inline-flex items-center gap-2 text-sm font-semibold">
-            <span aria-hidden className="h-2.5 w-2.5 rounded-sm bg-orange-500" />
-            <span className="tracking-tight text-violet-900">Wincentive</span>
-          </span>
-          <h1 className="mt-5 text-3xl font-semibold tracking-tight text-stone-900 sm:text-4xl">
-            Create Promotion
-          </h1>
-          {/* The wallet button is deliberately in the header, OUTSIDE the <form>, so it can never
-              submit the form. It is optional: drafts save without a wallet, and connecting does
-              not publish anything or prove the wallet is on Devnet or authorized as a merchant. */}
-          <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
-            <p className="rounded-full bg-orange-100 px-3 py-1 text-xs font-medium text-orange-800">
-              Draft configuration · not published
+      <main>
+        {/* Intro: compact. Headline on the left, a small network utility on the right. */}
+        <section className="mx-auto grid max-w-[1240px] gap-8 px-5 pb-10 pt-4 sm:px-8 lg:grid-cols-12 lg:gap-8 lg:pb-12 lg:pt-6">
+          <div className="lg:col-span-7">
+            <Link
+              href="/merchant"
+              className={`-my-3 inline-flex min-h-11 items-center text-sm font-medium text-[#6133A7] underline-offset-4 hover:underline ${FOCUS}`}
+            >
+              ← Back to Dashboard
+            </Link>
+
+            <p className="mt-6 flex items-center gap-3 text-xs font-bold uppercase tracking-[0.18em] text-[#6133A7]">
+              <span aria-hidden className="h-[3px] w-8 rounded-full bg-[#F58C38]" />
+              Create a promotion
             </p>
-            <WalletButton />
+            <h1
+              className={`${DISPLAY} mt-5 text-[clamp(2.5rem,5vw,4.1rem)] font-semibold leading-[0.95] tracking-[-0.045em]`}
+            >
+              Give them something to root for.
+            </h1>
+            <p className="mt-5 max-w-[34rem] text-lg leading-relaxed text-[#5A5463]">
+              Design an offer, choose its outcome, and see how customers will experience it.
+            </p>
+            <a
+              href="#preview-heading"
+              className={`mt-4 inline-block text-sm font-semibold text-[#6133A7] underline underline-offset-4 lg:hidden ${FOCUS}`}
+            >
+              Jump to the customer preview
+            </a>
           </div>
-          <p className="mt-2 text-xs leading-relaxed text-stone-500 sm:text-right">
-            Wallet connection will be used for future on-chain promotion creation. It is optional,
-            and connecting does not publish anything.
-          </p>
-          {/* Read-only status. A verified Devnet RPC says nothing about the wallet's own network
-              (the notice itself shows that as "Not verified"). Also outside the <form>. */}
-          <DevnetNetworkNotice />
-          <p className="mt-3 max-w-2xl text-base leading-relaxed text-stone-600">
-            Configure an outcome-based refund offer for any product or service. Hedging against the
-            Gemini prediction market is <strong>simulated</strong>: no real orders are placed and no
-            real money moves.
-          </p>
-        </header>
 
-        <form className="mt-8 space-y-6" onSubmit={handleSubmit} noValidate>
-          <Section title="Offer" intro="What you are selling and what customers pay.">
-            <div className="sm:col-span-2">
+          {/* Utility area. Read-only status: a verified Devnet RPC says nothing about the wallet's
+              own network (the notice itself shows that as "Not verified"). Outside the <form>. */}
+          <div className="lg:col-span-5 lg:self-end">
+            <p className="text-sm font-semibold">Wallet and network</p>
+            <p className="mt-1 text-xs leading-relaxed text-[#5A5463]">
+              Wallet connection will be used for future on-chain promotion creation. It is optional,
+              and connecting does not publish anything.
+            </p>
+            <DevnetNetworkNotice />
+          </div>
+        </section>
+
+        <div className="mx-auto grid max-w-[1240px] gap-14 px-5 pb-20 sm:px-8 lg:grid-cols-12 lg:gap-12 lg:pb-28">
+          {/* Configuration form */}
+          <form className="lg:col-span-7" onSubmit={handleSubmit} noValidate>
+            <Step n="01" title="The offer" intro="What you are selling and what customers pay.">
+              <div className="sm:col-span-2">
+                <Field
+                  id="name"
+                  error={errorFor("name")}
+                  label="Promotion Name"
+                  help="Shown to you and your customers."
+                >
+                  <input {...inputProps("name")} type="text" placeholder="Game Day Refund" />
+                </Field>
+              </div>
+              <div className="sm:col-span-2">
+                <Field
+                  id="description"
+                  error={errorFor("description")}
+                  label="Product or Service Description"
+                  help="Describe what the customer is buying. Any product or service works."
+                >
+                  <textarea
+                    {...inputProps("description")}
+                    rows={3}
+                    placeholder="What does the customer receive?"
+                  />
+                </Field>
+              </div>
               <Field
-                id="name"
-                error={errorFor("name")}
-                label="Promotion Name"
-                help="Shown to you and your customers."
+                id="price"
+                error={errorFor("price")}
+                label="Purchase Price (mock USDC)"
+                help="Amount each customer deposits into escrow, and the amount refunded if the trigger occurs. Valueless Devnet test tokens."
               >
-                <input {...inputProps("name")} type="text" placeholder="Game Day Refund" />
-              </Field>
-            </div>
-            <div className="sm:col-span-2">
-              <Field
-                id="description"
-                error={errorFor("description")}
-                label="Product or Service Description"
-                help="Describe what the customer is buying. Any product or service works."
-              >
-                <textarea
-                  {...inputProps("description")}
-                  rows={3}
-                  placeholder="What does the customer receive?"
+                <input
+                  {...inputProps("price")}
+                  type="number"
+                  inputMode="decimal"
+                  min="0"
+                  step="any"
+                  placeholder="0.00"
                 />
               </Field>
+            </Step>
+
+            <Step
+              n="02"
+              title="The outcome"
+              intro="The Gemini market that decides whether customers are refunded."
+            >
+              <Field
+                id="marketId"
+                error={errorFor("marketId")}
+                label="Gemini Market ID"
+                help="Paste the exact market identifier. Market search is not connected yet, and the ID is not validated."
+              >
+                <input {...inputProps("marketId")} type="text" placeholder="Market identifier" />
+              </Field>
+              <Field
+                id="refundTrigger"
+                error={errorFor("refundTrigger")}
+                label="Refund Trigger"
+                help="A readable label for the outcome that earns customers a refund. Customers are refunded if the market resolves YES."
+              >
+                <input
+                  {...inputProps("refundTrigger")}
+                  type="text"
+                  placeholder="Outcome that triggers a refund"
+                />
+              </Field>
+            </Step>
+
+            <Step
+              n="03"
+              title="The limits"
+              intro="When the offer ends, and off-chain guardrails for the simulated hedge. These are not escrowed funds."
+            >
+              <div className="sm:col-span-2">
+                <Field
+                  id="expiresAt"
+                  error={errorFor("expiresAt")}
+                  label="Promotion Expiration"
+                  help="Deadline for purchase eligibility. Deposits are rejected after this time."
+                >
+                  <input {...inputProps("expiresAt")} type="datetime-local" />
+                </Field>
+              </div>
+              <Field
+                id="maxHedgePrice"
+                error={errorFor("maxHedgePrice")}
+                label="Maximum Hedge Price (USD per $1 payout)"
+                help="The most you would accept paying per $1 of simulated payout. If the modeled price is above this, the hedge is treated as failed and the customer is refunded."
+              >
+                <input
+                  {...inputProps("maxHedgePrice")}
+                  type="number"
+                  inputMode="decimal"
+                  min="0"
+                  max="1"
+                  step="any"
+                  placeholder="0.00"
+                />
+              </Field>
+              <Field
+                id="budget"
+                error={errorFor("budget")}
+                label="Promotion Budget (mock USDC)"
+                help="Your cap on total modeled hedge spending across all purchases. Separate from customer deposits held in Solana escrow."
+              >
+                <input
+                  {...inputProps("budget")}
+                  type="number"
+                  inputMode="decimal"
+                  min="0"
+                  step="any"
+                  placeholder="0.00"
+                />
+              </Field>
+            </Step>
+
+            {/* Primary action */}
+            <div className="border-t border-[#E6E1D8] pt-9">
+              <button
+                type="submit"
+                className="inline-flex min-h-12 items-center justify-center rounded-full bg-[#6133A7] px-9 py-3.5 text-base font-semibold text-white shadow-sm transition-colors hover:bg-[#4E2890] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#6133A7]"
+              >
+                Save Demo Draft
+              </button>
+              <ul className="mt-5 max-w-xl list-disc space-y-1.5 pl-5 text-sm leading-relaxed text-[#5A5463]">
+                <li>
+                  Saved only in this browser session (sessionStorage), and shown on the dashboard
+                  while this tab stays open.
+                </li>
+                <li>Saving does not publish a promotion. Publishing is not implemented yet.</li>
+                <li>
+                  No blockchain transaction is executed. No odds or cost estimates are shown because
+                  no live market data is connected.
+                </li>
+              </ul>
+
+              <div role="status" aria-live="polite">
+                {save.status === "saved" && (
+                  <div className="mt-5 max-w-xl border-l-[3px] border-[#1E8A5A] bg-[#EAF6F0] p-4 text-sm leading-relaxed text-[#14513A]">
+                    <p className="font-semibold">Demo draft saved in this browser session.</p>
+                    <p className="mt-1">
+                      This promotion is <strong>not published</strong>,{" "}
+                      <strong>not stored on-chain</strong>, and{" "}
+                      <strong>not available for real checkout</strong>. The market ID and refund
+                      trigger are unverified.
+                    </p>
+                    <p className="mt-1 break-all text-xs text-[#14513A]">
+                      Draft ID: <span className="font-mono">{save.draftId}</span>
+                    </p>
+                    <p className="mt-2">
+                      <Link
+                        href="/merchant"
+                        className={`font-semibold text-[#6133A7] underline underline-offset-4 ${FOCUS}`}
+                      >
+                        See it on the dashboard
+                      </Link>
+                    </p>
+                  </div>
+                )}
+                {save.status === "error" && (
+                  <p className="mt-5 max-w-xl border-l-[3px] border-[#C4372B] bg-[#FCEDEB] p-4 text-sm font-medium text-[#8A1F16]">
+                    Could not save the demo draft: this browser blocked session storage. Nothing was
+                    saved.
+                  </p>
+                )}
+              </div>
             </div>
-            <Field
-              id="price"
-              error={errorFor("price")}
-              label="Purchase Price (mock USDC)"
-              help="Amount each customer deposits into escrow, and the amount refunded if the trigger occurs. Valueless Devnet test tokens."
-            >
-              <input
-                {...inputProps("price")}
-                type="number"
-                inputMode="decimal"
-                min="0"
-                step="any"
-                placeholder="0.00"
-              />
-            </Field>
-            <Field
-              id="expiresAt"
-              error={errorFor("expiresAt")}
-              label="Promotion Expiration"
-              help="Deadline for purchase eligibility. Deposits are rejected after this time."
-            >
-              <input {...inputProps("expiresAt")} type="datetime-local" />
-            </Field>
-          </Section>
+          </form>
 
-          <Section
-            title="Prediction market"
-            intro="The Gemini market that decides whether customers are refunded."
+          {/* Live customer preview: a ticket, sticky beside the form on large screens */}
+          <aside
+            aria-labelledby="preview-heading"
+            className="lg:sticky lg:top-6 lg:col-span-5 lg:self-start"
           >
-            <Field
-              id="marketId"
-              error={errorFor("marketId")}
-              label="Gemini Market ID"
-              help="Paste the exact market identifier. Market search is not connected yet, and the ID is not validated."
-            >
-              <input {...inputProps("marketId")} type="text" placeholder="Market identifier" />
-            </Field>
-            <Field
-              id="refundTrigger"
-              error={errorFor("refundTrigger")}
-              label="Refund Trigger"
-              help="A readable label for the outcome that earns customers a refund. Customers are refunded if the market resolves YES."
-            >
-              <input
-                {...inputProps("refundTrigger")}
-                type="text"
-                placeholder="Outcome that triggers a refund"
-              />
-            </Field>
-          </Section>
-
-          <Section
-            title="Simulated hedge limits"
-            intro="Off-chain guardrails for the simulated hedge. These are not escrowed funds."
-          >
-            <Field
-              id="maxHedgePrice"
-              error={errorFor("maxHedgePrice")}
-              label="Maximum Hedge Price (USD per $1 payout)"
-              help="The most you would accept paying per $1 of simulated payout. If the modeled price is above this, the hedge is treated as failed and the customer is refunded."
-            >
-              <input
-                {...inputProps("maxHedgePrice")}
-                type="number"
-                inputMode="decimal"
-                min="0"
-                max="1"
-                step="any"
-                placeholder="0.00"
-              />
-            </Field>
-            <Field
-              id="budget"
-              error={errorFor("budget")}
-              label="Promotion Budget (mock USDC)"
-              help="Your cap on total modeled hedge spending across all purchases. Separate from customer deposits held in Solana escrow."
-            >
-              <input
-                {...inputProps("budget")}
-                type="number"
-                inputMode="decimal"
-                min="0"
-                step="any"
-                placeholder="0.00"
-              />
-            </Field>
-          </Section>
-
-          <div className="rounded-xl border border-dashed border-violet-300 bg-white px-5 py-5">
-            <p className="text-sm text-stone-600">
-              Saving stores a demo draft in this browser session only. Publishing promotions is not
-              implemented yet. No odds or cost estimates are shown because no live market data is
-              connected.
+            <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+              <h2
+                id="preview-heading"
+                className={`${DISPLAY} scroll-mt-4 text-[1.5rem] font-semibold leading-tight tracking-[-0.025em]`}
+              >
+                Customer Preview
+              </h2>
+              <span className="rounded-full bg-[#FDEBD9] px-3 py-1 text-xs font-bold text-[#7A4208]">
+                Demo draft preview
+              </span>
+            </div>
+            <p className="mt-2 text-[15px] leading-relaxed text-[#5A5463]">
+              How your offer would look to customers. Updates as you type.
             </p>
-            <button
-              type="submit"
-              className="mt-4 rounded-lg bg-violet-700 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-violet-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-500"
+
+            <article
+              aria-label="Customer offer preview"
+              className="relative mt-5 overflow-hidden rounded-[20px] border border-[#E6E1D8] bg-white shadow-[0_1px_0_rgba(33,29,40,0.04),0_28px_56px_-28px_rgba(33,29,40,0.32)]"
             >
-              Save Demo Draft
-            </button>
-
-            <div role="status" aria-live="polite">
-              {save.status === "saved" && (
-                <div className="mt-4 rounded-lg border border-emerald-200 bg-emerald-50 p-4 text-sm leading-relaxed text-emerald-900">
-                  <p className="font-medium">Demo draft saved in this browser session.</p>
-                  <p className="mt-1">
-                    This promotion is <strong>not published</strong>,{" "}
-                    <strong>not stored on-chain</strong>, and{" "}
-                    <strong>not available for real checkout</strong>. The market ID and refund
-                    trigger are unverified.
-                  </p>
-                  <p className="mt-1 break-all text-xs text-emerald-800">
-                    Draft ID: <span className="font-mono">{save.draftId}</span>
-                  </p>
-                </div>
-              )}
-              {save.status === "error" && (
-                <p className="mt-4 rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-800">
-                  Could not save the demo draft: this browser blocked session storage. Nothing was
-                  saved.
-                </p>
-              )}
-            </div>
-          </div>
-        </form>
-
-        <section aria-labelledby="preview-heading" className="mt-10">
-          <h2 id="preview-heading" className="text-lg font-semibold text-stone-900">
-            Customer Preview
-          </h2>
-          <p className="mt-1 text-sm text-stone-600">
-            How your offer would look to customers. Updates as you type.
-          </p>
-
-          <article className="mt-4 overflow-hidden rounded-2xl border border-violet-200 bg-white shadow-sm">
-            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-violet-100 bg-violet-50 px-5 py-3">
-              <span className="inline-flex items-center gap-2 text-sm font-semibold text-violet-900">
-                <span aria-hidden className="h-2 w-2 rounded-sm bg-orange-500" />
-                Wincentive
-              </span>
-              <span className="rounded-full bg-orange-100 px-2.5 py-0.5 text-xs font-medium text-orange-800">
-                Draft Preview
-              </span>
-            </div>
-
-            <div className="px-5 py-6 sm:px-6">
-              <h3 className="break-words text-2xl font-semibold tracking-tight text-stone-900">
-                {form.name.trim() || (
-                  <span className="italic text-stone-600">Your promotion name</span>
-                )}
-              </h3>
-              <p className="mt-2 whitespace-pre-line break-words text-sm leading-relaxed text-stone-600">
-                {form.description.trim() || (
-                  <span className="italic text-stone-600">
-                    A description of the product or service will appear here.
+              <div aria-hidden className={`h-[3px] ${BRAND_HAIRLINE}`} />
+              <div className="p-6">
+                <div className="flex items-center gap-2.5">
+                  <LogoMark className="h-7 w-7 rounded-lg" />
+                  <span className={`${DISPLAY} text-sm font-bold tracking-[-0.01em]`}>
+                    Wincentive offer
                   </span>
-                )}
-              </p>
-
-              <dl className="mt-6 grid gap-4 sm:grid-cols-2">
-                <div className="rounded-xl bg-stone-50 p-4">
-                  <dt className="text-xs font-medium uppercase tracking-wide text-stone-500">
-                    Purchase price
-                  </dt>
-                  <dd className="mt-1 text-2xl font-semibold text-violet-900">
-                    {previewPrice(form.price) ?? <span className="text-stone-500">—</span>}
-                  </dd>
-                  <dd className="mt-1 text-xs text-stone-500">mock USDC (Devnet test tokens)</dd>
+                  <span
+                    aria-hidden
+                    className="ml-auto h-3.5 w-3.5 rounded-full border-2 border-[#CFC8BC]"
+                  />
                 </div>
-                <div className="rounded-xl bg-stone-50 p-4">
-                  <dt className="text-xs font-medium uppercase tracking-wide text-stone-500">
-                    Refund condition
-                  </dt>
-                  <dd className="mt-1 break-words text-sm leading-relaxed text-stone-800">
+
+                <h3
+                  className={`${DISPLAY} mt-5 break-words text-[1.9rem] font-semibold leading-[1.08] tracking-[-0.03em]`}
+                >
+                  {form.name.trim() || (
+                    <span className="italic text-[#5A5463]">Your promotion name</span>
+                  )}
+                </h3>
+                <p className="mt-2 whitespace-pre-line break-words text-[15px] leading-relaxed text-[#4E4858]">
+                  {form.description.trim() || (
+                    <span className="italic text-[#5A5463]">
+                      A description of the product or service will appear here.
+                    </span>
+                  )}
+                </p>
+
+                <div className="mt-5 flex items-end justify-between gap-4">
+                  <p className="text-xs font-medium text-[#5A5463]">Purchase price</p>
+                  <div className="text-right">
+                    <p
+                      className={`${DISPLAY} text-[2.4rem] font-semibold leading-none tracking-[-0.04em] tabular-nums`}
+                    >
+                      {previewPrice(form.price) ?? <span className="text-[#6B6575]">—</span>}
+                    </p>
+                    <p className="mt-1 text-xs text-[#5A5463]">mock USDC (Devnet test tokens)</p>
+                  </div>
+                </div>
+
+                <div aria-hidden className="my-5 border-t border-dashed border-[#CFC8BC]" />
+
+                <div>
+                  <p className="text-xs font-medium text-[#5A5463]">Refund condition</p>
+                  <p className="mt-1 break-words text-[15px] leading-relaxed text-[#211D28]">
                     If{" "}
                     {form.refundTrigger.trim() ? (
                       <strong className="font-semibold">{form.refundTrigger.trim()}</strong>
                     ) : (
-                      <span className="italic text-stone-600">your refund trigger happens</span>
+                      <span className="italic text-[#5A5463]">your refund trigger happens</span>
                     )}
                     , you receive your purchase amount back.
-                  </dd>
+                  </p>
                 </div>
-              </dl>
-            </div>
+              </div>
 
-            <p className="border-t border-stone-100 bg-stone-50 px-5 py-3 text-xs leading-relaxed text-stone-500">
-              This promotion has not been created or published. Real purchases would use valueless
-              Devnet test tokens, and the merchant&apos;s Gemini hedge is simulated. The refund
-              condition is the merchant&apos;s own label, not a verified market outcome.
-            </p>
-          </article>
-        </section>
+              <p className="border-t border-[#E6E1D8] bg-[#FAF9F6] px-6 py-4 text-xs leading-relaxed text-[#5A5463]">
+                This promotion has not been created or published. Real purchases would use valueless
+                Devnet test tokens, and the merchant&apos;s Gemini hedge is simulated. The refund
+                condition is the merchant&apos;s own label, not a verified market outcome.
+              </p>
+            </article>
+          </aside>
+        </div>
       </main>
+
+      {/* Footer */}
+      <footer className="border-t border-[#E6E1D8] bg-white">
+        <div className="mx-auto grid max-w-[1240px] gap-8 px-5 py-10 sm:px-8 md:grid-cols-12 md:gap-8">
+          <div className="flex items-start gap-3 md:col-span-4">
+            <LogoMark className="h-11 w-11 rounded-xl" />
+            <div>
+              <p className={`${DISPLAY} text-lg font-bold tracking-[-0.02em]`}>Wincentive</p>
+              <p className="mt-0.5 text-sm text-[#5A5463]">Outcome-powered commerce.</p>
+            </div>
+          </div>
+          <p className="text-sm leading-relaxed text-[#4E4858] md:col-span-5">
+            Solana Devnet demonstration. Valueless test tokens. Gemini market data is read-only, and
+            hedge execution is simulated. No real-money transactions or Gemini orders.
+          </p>
+          <nav
+            aria-label="Footer"
+            className="flex flex-col gap-2 text-sm font-medium md:col-span-3 md:items-end"
+          >
+            <Link href="/" className={`hover:text-[#6133A7] ${FOCUS}`}>
+              Home
+            </Link>
+            <Link href="/merchant" className={`hover:text-[#6133A7] ${FOCUS}`}>
+              Promotions
+            </Link>
+            <Link href="/checkout/demo" className={`hover:text-[#6133A7] ${FOCUS}`}>
+              Demo checkout
+            </Link>
+          </nav>
+        </div>
+      </footer>
     </div>
   );
 }

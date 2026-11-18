@@ -1,218 +1,308 @@
+import localFont from "next/font/local";
 import Link from "next/link";
-import { DevnetBanner } from "@/components/devnet-banner";
+import { LogoMark } from "@/components/layout/LogoMark";
+import { SiteHeader } from "@/components/layout/SiteHeader";
 import { SavedDraftCard } from "@/components/merchant/SavedDraftCard";
-import { WalletButton } from "@/components/wallet-button";
 import { DEMO_PROMOTION } from "@/lib/fixtures/promotions";
 import { formatTokenAmount } from "@/lib/format";
 
-// Presentational only. No API is connected, so the overview figures show as unavailable. The one
-// promotion card below is the labeled DEMO_PROMOTION fixture; it is not counted in any figure.
+// Merchant dashboard. A Server Component: no API is connected, so nothing here is live data.
+// - "Demo draft" is the record SavedDraftCard reads from this browser session (client component).
+// - "Illustrative sample" is the labeled DEMO_PROMOTION fixture. Neither is published or on-chain,
+//   and neither is counted in any figure.
 // TODO(Dev 1): wire to the REST API (GET /api/merchants/:id/dashboard) once Dev 4 documents the DTOs.
+//
+// Styling follows the homepage (page-scoped): same fonts (vendored in ../fonts), colors and rhythm.
+// Header, wordmark and the cropped W logo come from src/components/layout (SiteHeader, LogoMark).
 
-const OVERVIEW_CARDS = [
-  { label: "Total Sales", hint: "Test-token purchases across your promotions" },
-  { label: "Active Promotions", hint: "Offers currently accepting deposits" },
-  { label: "Simulated Hedge Costs", hint: "Modeled premiums, not real trades" },
-];
+const display = localFont({
+  src: "../fonts/bricolage-grotesque-latin.woff2",
+  weight: "200 800",
+  variable: "--font-display",
+  display: "swap",
+  fallback: ["ui-sans-serif", "system-ui", "sans-serif"],
+});
+const body = localFont({
+  src: "../fonts/instrument-sans-latin.woff2",
+  weight: "400 700",
+  variable: "--font-body",
+  display: "swap",
+  fallback: ["ui-sans-serif", "system-ui", "sans-serif"],
+});
 
-const STEPS = [
+const DISPLAY = "font-[family-name:var(--font-display)]";
+const FOCUS =
+  "focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#6133A7] focus-visible:rounded-sm";
+
+// Honest availability: these figures are not connected, so no value is shown for any of them.
+const FIGURES = ["Total sales", "Active promotions", "Simulated hedge costs"];
+
+// Merchant lifecycle. Only the first stage exists in this demo.
+const LIFECYCLE = [
   {
-    title: "Create a promotion",
-    body: "Pick a prediction market outcome and set the refund offer for any product or service you sell.",
+    title: "Draft",
+    body: "Set the price, refund condition, market ID and hedge limits. A draft is saved only in this browser session.",
+    available: true,
   },
   {
-    title: "Customers purchase",
-    body: "Customers pay with mock USDC on Solana Devnet. Funds are held in an on-chain escrow.",
+    title: "Publish",
+    body: "Sign with a Solana Devnet wallet to create the escrow. Connecting a wallet is optional here, and it does not prove ownership of any promotion.",
+    available: false,
   },
   {
-    title: "A hedge is simulated",
-    body: "Live Gemini market prices inform a simulated hedge. No real orders are placed.",
+    title: "Go live",
+    body: "Customers check out with valueless test tokens while the hedge is simulated.",
+    available: false,
   },
   {
-    title: "Outcome resolves",
-    body: "After the market settles, customers or merchants claim the escrowed test tokens.",
+    title: "Claim",
+    body: "Once the market's official outcome is final, the escrowed tokens are claimed by the customer or by you.",
+    available: false,
   },
 ];
 
 export default function MerchantPage() {
-  return (
-    <div className="min-h-screen bg-stone-50">
-      <DevnetBanner />
+  const sample = DEMO_PROMOTION;
+  const price = formatTokenAmount(sample.offerAmount);
+  const expires = new Date(sample.expiresAt).toLocaleDateString("en-US", {
+    dateStyle: "long",
+    timeZone: "UTC",
+  });
 
-      <main className="mx-auto max-w-5xl px-4 py-10 sm:px-6 sm:py-14">
-        {/* Header */}
-        <header className="flex flex-col gap-6 border-b border-stone-200 pb-8 sm:flex-row sm:items-end sm:justify-between">
-          <div>
-            <Link href="/" className="inline-flex items-center gap-2 text-sm font-semibold">
-              <span aria-hidden className="h-2.5 w-2.5 rounded-sm bg-orange-500" />
-              <span className="tracking-tight text-violet-900">Wincentive</span>
-            </Link>
-            <h1 className="mt-5 text-3xl font-semibold tracking-tight text-stone-900 sm:text-4xl">
-              Merchant Dashboard
-            </h1>
-            <p className="mt-3 max-w-2xl text-base leading-relaxed text-stone-600">
-              Manage outcome-based refund promotions: offer customers a refund if a real-world
-              outcome goes their way, while tracking how the promotion is modeled to be hedged.
+  return (
+    <div
+      className={`${display.variable} ${body.variable} min-h-screen bg-[#FAF9F6] font-[family-name:var(--font-body)] text-[#211D28] antialiased`}
+    >
+      {/* Quiet disclosure strip (the full disclosure is in the footer) */}
+      <p className="bg-[#EFE9F8] px-4 py-2 text-center text-xs font-medium text-[#3F2A66]">
+        Devnet demo with valueless test tokens. Hedging is simulated.
+      </p>
+
+      <SiteHeader current="promotions" />
+
+      <main>
+        {/* Intro: headline and actions on the left, a quiet availability notice on the right */}
+        <section className="mx-auto grid max-w-[1240px] gap-10 px-5 pb-12 pt-8 sm:px-8 lg:grid-cols-12 lg:gap-8 lg:pb-14 lg:pt-12">
+          <div className="lg:col-span-8">
+            <p className="flex items-center gap-3 text-xs font-bold uppercase tracking-[0.18em] text-[#6133A7]">
+              <span aria-hidden className="h-[3px] w-8 rounded-full bg-[#F58C38]" />
+              Merchant workspace
             </p>
-          </div>
-          <div className="flex shrink-0 flex-col gap-4 sm:items-end">
-            {/* Navigation only. Nothing is created, published or claimed by clicking these. */}
-            <nav
-              aria-label="Merchant actions"
-              className="flex shrink-0 flex-wrap items-center gap-3"
+            <h1
+              className={`${DISPLAY} mt-6 text-[clamp(2.7rem,5.4vw,4.4rem)] font-semibold leading-[0.95] tracking-[-0.045em]`}
             >
+              Make every offer an event.
+            </h1>
+            <p className="mt-6 max-w-[38rem] text-lg leading-relaxed text-[#5A5463]">
+              Draft outcome-based refund offers, preview how customers will see them, and see what
+              comes next. Everything here runs on Solana Devnet with valueless test tokens, and
+              hedging is simulated.
+            </p>
+            <div className="mt-8 flex flex-wrap items-center gap-3">
               <Link
                 href="/merchant/new"
-                className="inline-flex items-center justify-center gap-2 rounded-lg bg-violet-700 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-violet-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-500"
+                className="inline-flex items-center justify-center rounded-full bg-[#6133A7] px-7 py-3.5 text-base font-semibold text-white transition-colors hover:bg-[#4E2890] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#6133A7]"
               >
-                <span aria-hidden className="h-2 w-2 rounded-sm bg-orange-400" />
-                Create Promotion
+                Create promotion
               </Link>
               <Link
                 href="/merchant/claims"
-                className="inline-flex items-center justify-center rounded-lg border border-stone-300 bg-white px-4 py-2.5 text-sm font-semibold text-violet-800 transition-colors hover:border-violet-300 hover:bg-violet-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-500"
+                className="inline-flex items-center justify-center rounded-full border border-[#211D28]/30 px-7 py-3.5 text-base font-semibold text-[#211D28] transition-colors hover:border-[#211D28] hover:bg-white focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#6133A7]"
               >
-                Merchant Claims
+                View claims
               </Link>
-            </nav>
-
-            {/* Existing wallet adapter UI (connect / disconnect). Optional: the dashboard and demo
-                work without it, and a connected wallet is not proof of owning any promotion. */}
-            <div className="flex flex-col gap-1.5 sm:items-end">
-              <WalletButton />
-              <p className="max-w-xs text-xs leading-relaxed text-stone-500 sm:text-right">
-                Connect a Solana Devnet wallet for future merchant transactions. Optional;
-                connecting does not prove ownership of any promotion.
-              </p>
             </div>
           </div>
-        </header>
 
-        {/* Overview */}
-        <section aria-labelledby="overview-heading" className="mt-10">
-          <h2
-            id="overview-heading"
-            className="text-sm font-semibold uppercase tracking-wide text-stone-500"
-          >
-            Overview
-          </h2>
-          <div className="mt-4 grid gap-4 sm:grid-cols-3">
-            {OVERVIEW_CARDS.map((card) => (
-              <div
-                key={card.label}
-                className="rounded-xl border border-stone-200 bg-white p-5 shadow-sm"
-              >
-                <p className="text-sm font-medium text-stone-600">{card.label}</p>
-                <p className="mt-3 text-3xl font-semibold text-stone-300" aria-label="Unavailable">
-                  —
-                </p>
-                <p className="mt-2 text-xs text-stone-500">{card.hint}</p>
-                <p className="mt-3 inline-block rounded-full bg-stone-100 px-2 py-0.5 text-xs font-medium text-stone-600">
-                  Data not connected
-                </p>
-              </div>
-            ))}
-          </div>
+          {/* Live figures: honest availability notice, deliberately quiet (no values, no tiles) */}
+          <section aria-labelledby="figures-heading" className="lg:col-span-4 lg:self-end">
+            <h2 id="figures-heading" className="text-sm font-semibold">
+              Live figures
+            </h2>
+            <dl className="mt-3 divide-y divide-[#E6E1D8] border-y border-[#E6E1D8] text-sm">
+              {FIGURES.map((label) => (
+                <div key={label} className="flex items-baseline justify-between gap-4 py-2.5">
+                  <dt className="text-[#5A5463]">{label}</dt>
+                  <dd className="font-medium">Not connected</dd>
+                </div>
+              ))}
+            </dl>
+            <p className="mt-3 text-xs leading-relaxed text-[#5A5463]">
+              Live totals are not connected yet. Nothing on this page counts toward them.
+            </p>
+          </section>
         </section>
 
-        {/* Promotions */}
-        <section aria-labelledby="promotions-heading" className="mt-12">
-          <h2 id="promotions-heading" className="text-xl font-semibold text-stone-900">
-            Your Promotions
-          </h2>
-          <p className="mt-1 text-sm text-stone-600">
-            Live promotion data is not connected yet. Nothing below is a published or on-chain
-            promotion, and none of it is counted in the overview.
-          </p>
+        <div aria-hidden className="mx-auto max-w-[1240px] px-5 sm:px-8">
+          <div className="border-t border-[#E6E1D8]" />
+        </div>
 
-          {/* Client component: shows the draft saved in this browser session, if there is one. */}
-          <SavedDraftCard />
-
-          <p className="mt-6 text-xs font-medium uppercase tracking-wide text-stone-500">
-            Sample promotion (fictional UI example)
-          </p>
-          <article className="mt-2 rounded-xl border border-stone-200 bg-white p-5 shadow-sm sm:p-6">
-            <div className="flex flex-wrap items-start justify-between gap-3">
-              <div className="min-w-0">
-                <h3 className="break-words text-lg font-semibold text-stone-900">
-                  {DEMO_PROMOTION.name}
-                </h3>
-                <p className="mt-0.5 text-sm text-stone-500">{DEMO_PROMOTION.merchantName}</p>
-              </div>
-              <span className="rounded-full bg-orange-100 px-2.5 py-1 text-xs font-bold uppercase tracking-wide text-orange-800 ring-1 ring-inset ring-orange-300">
-                Demo data
-              </span>
+        {/* Promotion workspace (primary focus) + lifecycle (secondary) */}
+        <section
+          aria-labelledby="workspace-heading"
+          className="mx-auto grid max-w-[1240px] gap-14 px-5 py-14 sm:px-8 lg:grid-cols-12 lg:gap-10 lg:py-16"
+        >
+          <div className="lg:col-span-8">
+            <div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-2">
+              <h2
+                id="workspace-heading"
+                className={`${DISPLAY} text-[clamp(2rem,4vw,2.9rem)] font-semibold leading-none tracking-[-0.035em]`}
+              >
+                Your promotions
+              </h2>
+              <Link
+                href="/merchant/new"
+                className={`text-sm font-semibold text-[#6133A7] underline underline-offset-4 hover:text-[#4E2890] ${FOCUS}`}
+              >
+                Create promotion
+              </Link>
             </div>
-
-            <p className="mt-3 text-sm leading-relaxed text-stone-600">
-              {DEMO_PROMOTION.description}
+            <p className="mt-3 max-w-xl text-[15px] leading-relaxed text-[#5A5463]">
+              Live promotion data is not connected yet. Nothing below is published or on-chain.
+              Drafts you save in the form appear here for this browser session.
             </p>
 
-            <dl className="mt-5 grid gap-4 sm:grid-cols-3">
-              <div className="rounded-lg bg-stone-50 p-3">
-                <dt className="text-xs font-medium uppercase tracking-wide text-stone-500">
-                  Purchase price
-                </dt>
-                <dd className="mt-1 text-lg font-semibold text-violet-900">
-                  {formatTokenAmount(DEMO_PROMOTION.offerAmount)}
-                </dd>
-                <dd className="text-xs text-stone-500">mock USDC</dd>
-              </div>
-              <div className="rounded-lg bg-stone-50 p-3">
-                <dt className="text-xs font-medium uppercase tracking-wide text-stone-500">
-                  Refund condition
-                </dt>
-                <dd className="mt-1 break-words text-sm text-stone-800">
-                  If {DEMO_PROMOTION.refundCondition}, the customer is refunded.
-                </dd>
-              </div>
-              <div className="rounded-lg bg-stone-50 p-3">
-                <dt className="text-xs font-medium uppercase tracking-wide text-stone-500">
-                  Expires
-                </dt>
-                <dd className="mt-1 text-sm text-stone-800">
-                  {new Date(DEMO_PROMOTION.expiresAt).toLocaleDateString("en-US", {
-                    dateStyle: "long",
-                    timeZone: "UTC",
-                  })}{" "}
-                  <span className="text-xs text-stone-500">(UTC)</span>
-                </dd>
-              </div>
-            </dl>
+            {/* Editorial record list: a demo draft (if one was saved), then the illustrative sample */}
+            <div className="mt-8 border-t-2 border-[#211D28]">
+              {/* Client component: renders nothing unless a valid draft is in this session. */}
+              <SavedDraftCard />
 
-            <div className="mt-5 flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-stone-100 pt-4">
-              {/* Navigation only: opens the demo checkout page. */}
-              <Link
-                href={`/checkout/${DEMO_PROMOTION.id}`}
-                className="inline-flex items-center justify-center rounded-lg border border-violet-300 bg-white px-4 py-2 text-sm font-semibold text-violet-800 transition-colors hover:border-violet-400 hover:bg-violet-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-500"
+              <article
+                aria-label="Illustrative sample promotion"
+                className="border-b border-l-[3px] border-b-[#E6E1D8] border-l-[#F58C38] py-8 pl-5 sm:pl-7"
               >
-                View Demo Checkout
-              </Link>
-              <p className="text-xs text-stone-500">
-                Fictional example. Devnet test tokens only; hedging would be simulated.
-              </p>
-            </div>
-          </article>
-        </section>
+                <div className="flex flex-wrap items-start justify-between gap-x-8 gap-y-4">
+                  <div className="min-w-0 max-w-xl">
+                    <span className="inline-block rounded-full bg-[#FDEBD9] px-3 py-1 text-xs font-bold text-[#7A4208]">
+                      Illustrative sample
+                    </span>
+                    <h3
+                      className={`${DISPLAY} mt-3 break-words text-[1.7rem] font-semibold leading-tight tracking-[-0.025em]`}
+                    >
+                      {sample.name}
+                    </h3>
+                    <p className="mt-1 text-sm text-[#5A5463]">{sample.merchantName}</p>
+                    <p className="mt-3 text-[15px] leading-relaxed text-[#4E4858]">
+                      {sample.description}
+                    </p>
+                  </div>
+                  <div className="shrink-0 sm:text-right">
+                    <p
+                      className={`${DISPLAY} text-4xl font-semibold leading-none tracking-[-0.04em] tabular-nums`}
+                    >
+                      {price}
+                    </p>
+                    <p className="mt-1.5 text-xs text-[#5A5463]">mock USDC</p>
+                  </div>
+                </div>
 
-        {/* How it works */}
-        <section aria-labelledby="how-heading" className="mt-12">
-          <h2 id="how-heading" className="text-xl font-semibold text-stone-900">
-            How It Works
-          </h2>
-          <ol className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            {STEPS.map((step, i) => (
-              <li key={step.title} className="rounded-xl border border-stone-200 bg-white p-5">
-                <span className="flex h-7 w-7 items-center justify-center rounded-full bg-orange-100 text-sm font-semibold text-orange-700">
-                  {i + 1}
-                </span>
-                <h3 className="mt-3 font-semibold text-stone-900">{step.title}</h3>
-                <p className="mt-1 text-sm leading-relaxed text-stone-600">{step.body}</p>
-              </li>
-            ))}
-          </ol>
+                <dl className="mt-6 grid gap-x-8 gap-y-5 border-t border-[#E6E1D8] pt-5 text-sm sm:grid-cols-3">
+                  <div>
+                    <dt className="text-xs text-[#5A5463]">Refund condition</dt>
+                    <dd className="mt-1 font-medium">
+                      If {sample.refundCondition}, the customer is refunded.
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="text-xs text-[#5A5463]">Expires</dt>
+                    <dd className="mt-1 font-medium">{expires} (UTC)</dd>
+                  </div>
+                  <div>
+                    <dt className="text-xs text-[#5A5463]">Market</dt>
+                    <dd className="mt-1 font-medium">None linked in this demo</dd>
+                  </div>
+                </dl>
+
+                <div className="mt-6 flex flex-wrap items-center gap-x-5 gap-y-3">
+                  {/* Navigation only: opens the demo checkout page. */}
+                  <Link
+                    href={`/checkout/${sample.id}`}
+                    className="inline-flex items-center justify-center rounded-full border border-[#211D28]/30 px-5 py-2.5 text-sm font-semibold transition-colors hover:border-[#211D28] hover:bg-white focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#6133A7]"
+                  >
+                    View Demo Checkout
+                  </Link>
+                  <p className="max-w-xs text-xs leading-relaxed text-[#5A5463]">
+                    Fictional example, not a published or on-chain promotion. Devnet test tokens
+                    only; hedging would be simulated.
+                  </p>
+                </div>
+              </article>
+            </div>
+          </div>
+
+          {/* Secondary: what happens next (a sequence, so it is numbered by a rail of nodes) */}
+          <aside aria-labelledby="next-heading" className="lg:col-span-4 lg:pl-6">
+            <h2
+              id="next-heading"
+              className={`${DISPLAY} text-[1.6rem] font-semibold leading-tight tracking-[-0.03em]`}
+            >
+              What happens next
+            </h2>
+            <p className="mt-2 text-[15px] leading-relaxed text-[#5A5463]">
+              A promotion moves through four stages. Only the first exists in this demo.
+            </p>
+            <ol className="mt-7">
+              {LIFECYCLE.map((step) => (
+                <li
+                  key={step.title}
+                  className="relative ml-1 border-l border-[#CFC8BC] pb-8 pl-7 last:border-l-transparent last:pb-0"
+                >
+                  <span
+                    aria-hidden
+                    className={`absolute -left-[5px] top-[7px] h-[9px] w-[9px] rounded-full ${
+                      step.available ? "bg-[#6133A7]" : "border border-[#A59E92] bg-[#FAF9F6]"
+                    }`}
+                  />
+                  <h3
+                    className={`${DISPLAY} text-lg font-semibold leading-snug tracking-[-0.015em]`}
+                  >
+                    {step.title}
+                  </h3>
+                  <p className="mt-1 text-[15px] leading-relaxed text-[#5A5463]">{step.body}</p>
+                  <p
+                    className={`mt-2 text-xs font-semibold ${
+                      step.available ? "text-[#6133A7]" : "text-[#5A5463]"
+                    }`}
+                  >
+                    {step.available ? "Available in this demo" : "Not connected yet"}
+                  </p>
+                </li>
+              ))}
+            </ol>
+          </aside>
         </section>
       </main>
+
+      {/* Footer */}
+      <footer className="border-t border-[#E6E1D8] bg-white">
+        <div className="mx-auto grid max-w-[1240px] gap-8 px-5 py-10 sm:px-8 md:grid-cols-12 md:gap-8">
+          <div className="flex items-start gap-3 md:col-span-4">
+            <LogoMark className="h-11 w-11 rounded-xl" />
+            <div>
+              <p className={`${DISPLAY} text-lg font-bold tracking-[-0.02em]`}>Wincentive</p>
+              <p className="mt-0.5 text-sm text-[#5A5463]">Outcome-powered commerce.</p>
+            </div>
+          </div>
+          <p className="text-sm leading-relaxed text-[#4E4858] md:col-span-5">
+            Solana Devnet demonstration. Valueless test tokens. Gemini market data is read-only, and
+            hedge execution is simulated. No real-money transactions or Gemini orders.
+          </p>
+          <nav
+            aria-label="Footer"
+            className="flex flex-col gap-2 text-sm font-medium md:col-span-3 md:items-end"
+          >
+            <Link href="/" className={`hover:text-[#6133A7] ${FOCUS}`}>
+              Home
+            </Link>
+            <Link href="/merchant/claims" className={`hover:text-[#6133A7] ${FOCUS}`}>
+              Claims
+            </Link>
+            <Link href="/checkout/demo" className={`hover:text-[#6133A7] ${FOCUS}`}>
+              Demo checkout
+            </Link>
+          </nav>
+        </div>
+      </footer>
     </div>
   );
 }

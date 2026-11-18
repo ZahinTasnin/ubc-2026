@@ -82,6 +82,9 @@ function formatPrice(baseUnits: string): string {
   return `$${digits.slice(0, -6)}.${digits.slice(-6).replace(/0+$/, "")}`;
 }
 
+// Styling only: the display face is provided by the page that renders this card (--font-display).
+const DISPLAY = "font-[family-name:var(--font-display)]";
+
 export function SavedDraftCard() {
   const raw = useSyncExternalStore(subscribe, readRaw, readServerRaw);
   const draft = useMemo(() => parseDraft(raw), [raw]);
@@ -97,59 +100,55 @@ export function SavedDraftCard() {
   return (
     <article
       aria-label="Saved demo draft"
-      className="mt-4 rounded-xl border-2 border-violet-300 bg-violet-50/60 p-5 shadow-sm sm:p-6"
+      className="border-b border-l-[3px] border-b-[#E6E1D8] border-l-[#6133A7] py-8 pl-5 sm:pl-7"
     >
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="min-w-0">
-          <p className="text-xs font-medium uppercase tracking-wide text-violet-800">
-            Your saved draft
+      <div className="flex flex-wrap items-start justify-between gap-x-8 gap-y-4">
+        <div className="min-w-0 max-w-xl">
+          <span className="inline-block rounded-full bg-[#6133A7] px-3 py-1 text-xs font-bold text-white">
+            Demo draft
+          </span>
+          <h3
+            className={`${DISPLAY} mt-3 break-words text-[1.7rem] font-semibold leading-tight tracking-[-0.025em] text-[#211D28]`}
+          >
+            {draft.name}
+          </h3>
+          <p className="mt-1 text-sm text-[#5A5463]">Your saved draft</p>
+          <p className="mt-3 whitespace-pre-line break-words text-[15px] leading-relaxed text-[#4E4858]">
+            {draft.description}
           </p>
-          <h3 className="mt-1 break-words text-lg font-semibold text-stone-900">{draft.name}</h3>
         </div>
-        <span className="rounded-full bg-violet-700 px-2.5 py-1 text-xs font-bold uppercase tracking-wide text-white">
-          Demo draft
-        </span>
+        <div className="shrink-0 sm:text-right">
+          <p
+            className={`${DISPLAY} text-4xl font-semibold leading-none tracking-[-0.04em] tabular-nums text-[#211D28]`}
+          >
+            {formatPrice(draft.offerAmount)}
+          </p>
+          <p className="mt-1.5 text-xs text-[#5A5463]">mock USDC</p>
+        </div>
       </div>
 
-      <p className="mt-3 whitespace-pre-line break-words text-sm leading-relaxed text-stone-700">
-        {draft.description}
-      </p>
-
-      <dl className="mt-5 grid gap-4 sm:grid-cols-2">
-        <div className="rounded-lg bg-white p-3">
-          <dt className="text-xs font-medium uppercase tracking-wide text-stone-500">
-            Purchase price
-          </dt>
-          <dd className="mt-1 text-lg font-semibold text-violet-900">
-            {formatPrice(draft.offerAmount)}
-          </dd>
-          <dd className="text-xs text-stone-500">mock USDC</dd>
+      <dl className="mt-6 grid gap-x-8 gap-y-5 border-t border-[#E6E1D8] pt-5 text-sm sm:grid-cols-3">
+        <div className="min-w-0">
+          <dt className="text-xs text-[#5A5463]">Refund trigger</dt>
+          <dd className="mt-1 break-words font-medium text-[#211D28]">{draft.refundTrigger}</dd>
+          <dd className="mt-0.5 text-xs font-semibold text-[#7A4208]">Unverified label</dd>
         </div>
-        <div className="rounded-lg bg-white p-3">
-          <dt className="text-xs font-medium uppercase tracking-wide text-stone-500">Expires</dt>
-          <dd className="mt-1 text-sm text-stone-800">{expires} UTC</dd>
+        <div className="min-w-0">
+          <dt className="text-xs text-[#5A5463]">Expires</dt>
+          <dd className="mt-1 font-medium text-[#211D28]">{expires} UTC</dd>
         </div>
-        <div className="rounded-lg bg-white p-3">
-          <dt className="text-xs font-medium uppercase tracking-wide text-stone-500">
-            Refund trigger
-          </dt>
-          <dd className="mt-1 break-words text-sm text-stone-800">{draft.refundTrigger}</dd>
-          <dd className="text-xs font-medium text-orange-700">Unverified label</dd>
-        </div>
-        <div className="rounded-lg bg-white p-3">
-          <dt className="text-xs font-medium uppercase tracking-wide text-stone-500">
-            Gemini market ID
-          </dt>
-          <dd className="mt-1 break-all font-mono text-sm text-stone-800">
+        <div className="min-w-0">
+          <dt className="text-xs text-[#5A5463]">Gemini market ID</dt>
+          <dd className="mt-1 break-all font-mono text-[13px] text-[#211D28]">
             {draft.geminiMarketId}
           </dd>
-          <dd className="text-xs font-bold uppercase text-orange-700">Unverified</dd>
+          <dd className="mt-0.5 text-xs font-bold uppercase text-[#7A4208]">Unverified</dd>
         </div>
       </dl>
 
-      <div className="mt-5 rounded-lg border border-orange-200 bg-orange-50 p-4 text-sm leading-relaxed text-orange-900">
-        <p className="font-medium">This is a local draft, not a live promotion.</p>
-        <ul className="mt-2 list-disc space-y-1 pl-5">
+      <div className="mt-6 border-l-[3px] border-[#F58C38] pl-4 text-sm leading-relaxed text-[#4E4858]">
+        <p className="font-semibold text-[#211D28]">This is a local draft, not a live promotion.</p>
+        <ul className="mt-1.5 list-disc space-y-1 pl-5">
           <li>It exists only in this browser session.</li>
           <li>It has not been published on-chain or saved to the backend.</li>
           <li>It cannot accept deposits or checkout payments.</li>
