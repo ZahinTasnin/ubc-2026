@@ -43,10 +43,67 @@ pnpm dev:api             # http://localhost:4000/health
 
 ## Status
 
-**Escrow program (Dev 2): implemented** — 12 Anchor instructions with localnet tests (see
-`programs/escrow/docs.md`; not yet deployed to Devnet). **Everything else is still scaffold only** (shared
-types, typed stubs): deposit ingestion, Gemini adapter, hedge functionality and UI flows are **not
-implemented**. Stubs throw `NotImplementedError` or return HTTP 501 rather than faking behavior.
+- **Escrow program (Dev 2): implemented.** 12 Anchor instructions with localnet tests
+  (`programs/escrow/docs.md`); not yet deployed to Devnet.
+- **Backend (Dev 4): implemented** in `apps/api` with tests: read-only Gemini adapter (live quotes,
+  order books, official settlement, 5-minute crypto windows, per-game line picker), simulated hedge
+  model, purchase orchestrator and workers (CLAUDE.md §5.1 race handling), promotions directory,
+  merchant dashboard and receipts, Supabase store (`supabase/migrations`). Routes:
+  `docs/interfaces.md` §6. `pnpm --filter @hedged/api test` (in-memory) and `test:db` (Supabase).
+- **Not yet:** the real Devnet `SolanaServerGateway` (Dev 3; until then the backend's workers run only
+  on an in-memory fake chain with `SOLANA_GATEWAY=fake`) and the web UI (Dev 1).
+
+## Economic design
+
+**Mechanism.** A promo refunds the purchase price `R` if a specific Gemini market resolves YES. For
+each sale the backend sizes a hedge of `R / $1` YES contracts (rounded up to Gemini's 0.01 step) and
+prices it against the live ask side of the order book, so the hedge pays exactly `R` if the refund
+is owed. If the average fill price is `p`, the promo costs the merchant `C = p × R` per sale, plus
+any modelled fees.
+
+**Result for the merchant** (fully hedged, before cost of goods), per $5 sale at `p = $0.34`:
+
+|                       | Outcome YES | Outcome NO |
+| --------------------- | ----------- | ---------- |
+| Sale (held in escrow) | +$5.00      | +$5.00     |
+| Hedge premium         | −$1.70      | −$1.70     |
+| Hedge payout          | +$5.00      | $0         |
+| Refund to customer    | −$5.00      | $0         |
+| **Merchant keeps**    | **$3.30**   | **$3.30**  |
+
+The hedge fixes the promo's cost at `p × R`; it does not make the promo free. `p` is the
+market-implied probability of the refund, so the cost behaves like a discount of `p` that the
+customer experiences as a chance at a free item.
+
+**Merchant controls.** A threshold (maximum YES price, i.e. maximum cost as a share of the price),
+a total hedge budget, and a deposit deadline. Each sale is priced at the moment it happens; when the
+live price is above the threshold or the budget is used up, the promo shows as paused and checkout
+does not take payment. The line picker suggests, for a game, the most likely outcome that fits the
+threshold (e.g. "wins by 14+" when "wins" is too expensive).
+
+**What is real and what is simulated.** Real: Gemini prices, order books and official settlement
+(read-only, public endpoints); escrow transfers on Solana Devnet in a valueless mock stablecoin.
+Simulated: buying and settling the Gemini contracts, which are recorded in an off-chain ledger and
+labelled `simulated: true` everywhere. No Gemini order is ever placed.
+
+### Risks and how the design handles them
+
+| Risk                                               | Handling                                                                                                                                                             |
+| -------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Price moves before or during a sale                | Each sale is quoted live; above the merchant's threshold the hedge fails and the deposit is refunded before the item is handed over.                                 |
+| Thin order book / partial fill                     | A partial fill is never treated as covered: the simulated fill is released and the customer refunded.                                                                |
+| Payment and hedge are not atomic                   | Purchase is `PENDING` until `mark_hedged` is confirmed on-chain; the item is served only after that (`canServe`). Failures cancel and refund.                        |
+| Customer self-cancels while the hedge is in flight | New hedges stop at 70% of the on-chain cancel window; if the cancel still wins, the hedge is voided and its budget released.                                         |
+| Buying after the outcome is partly known           | Sports promos stop selling at kickoff; 5-minute crypto windows stop 5 minutes before the reference price is captured.                                                |
+| Wrong or premature result                          | Only Gemini's official settlement (`resolutionSide`) of the exact market is used; never prices near 0/1 or live scores. Resolution happens once, after the deadline. |
+| Cancelled or voided game                           | No automatic resolution; flagged for an operator.                                                                                                                    |
+| Budget overrun                                     | Budget is reserved atomically per hedge in the database; a sale that does not fit is refunded.                                                                       |
+| Fees and slippage                                  | Fill price walks the visible book; Gemini fees are a configurable parameter (0 = not modelled).                                                                      |
+| Trusted relayer                                    | A single backend relayer can resolve and cancel, but funds can only move to the recorded customer or merchant. A decentralised oracle is out of scope.               |
+
+**Production blockers (not solved here):** real execution on Gemini (account, fees, minimum sizes,
+liquidity), custody and settlement of real funds, promotional and gaming regulations by
+jurisdiction, KYC/AML, and card/fiat checkout.
 
 Docs: [architecture](docs/architecture.md) · [interfaces](docs/interfaces.md) · [workflow](docs/workflow.md) ·
 [ownership](docs/developer-ownership.md) · [setup](docs/setup.md)
