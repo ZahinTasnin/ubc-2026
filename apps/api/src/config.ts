@@ -6,15 +6,21 @@ export interface ApiConfig {
   hedge: { maxQuoteAgeMs: number; feeBps: number };
   /** Server-only. null = in-memory store (not durable). */
   supabase: { url: string; serviceRoleKey: string } | null;
+  /** Per-IP limit on POST requests (webhooks exempt). */
+  writeRateLimit: { maxPerWindow: number; windowMs: number };
   /** Exposure desk (simulated netting across shops). */
   desk: { lotContracts: number; rebalanceMs: number };
   workers: {
     /**
      * Which SolanaServerGateway backs the workers:
      * - "none": API only, no background workers (default until Dev 3's gateway lands)
-     * - "fake": IN-MEMORY fake chain + in-memory store, for local testing only (not Solana)
+     * - "fake": IN-MEMORY fake chain, for local testing only (not Solana)
+     * - "real": Dev 3's Devnet gateway (@hedged/solana/server), configured from the SOLANA_*,
+     *           QUICKNODE_* and RELAYER_* variables
      */
-    gateway: "none" | "fake";
+    gateway: "none" | "fake" | "real";
+    /** QuickNode Streams HMAC token; enables POST /webhooks/quicknode in "real" mode. */
+    streamsSecurityToken: string | null;
     resolvePollMs: number;
     reconcileMs: number;
     hedgeWindowFraction: number;
@@ -41,12 +47,20 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): ApiConfig {
       env.SUPABASE_URL && env.SUPABASE_SERVICE_ROLE_KEY
         ? { url: env.SUPABASE_URL, serviceRoleKey: env.SUPABASE_SERVICE_ROLE_KEY }
         : null,
+    writeRateLimit: {
+      maxPerWindow: Math.max(
+        1,
+        nonNegativeInt(env.WRITE_RATE_LIMIT_PER_MIN, 30, "WRITE_RATE_LIMIT_PER_MIN"),
+      ),
+      windowMs: 60_000,
+    },
     desk: {
       lotContracts: Math.max(1, nonNegativeInt(env.DESK_LOT_CONTRACTS, 10, "DESK_LOT_CONTRACTS")),
       rebalanceMs: nonNegativeInt(env.DESK_REBALANCE_MS, 15_000, "DESK_REBALANCE_MS"),
     },
     workers: {
       gateway: parseGatewayMode(env.SOLANA_GATEWAY),
+      streamsSecurityToken: env.QUICKNODE_STREAMS_SECURITY_TOKEN || null,
       resolvePollMs: nonNegativeInt(env.RESOLVE_POLL_MS, 5000, "RESOLVE_POLL_MS"),
       reconcileMs: nonNegativeInt(env.RECONCILE_MS, 60_000, "RECONCILE_MS"),
       hedgeWindowFraction: 0.7,
@@ -65,10 +79,8 @@ function nonNegativeInt(raw: string | undefined, fallback: number, name: string)
   return n;
 }
 
-function parseGatewayMode(raw: string | undefined): "none" | "fake" {
+function parseGatewayMode(raw: string | undefined): "none" | "fake" | "real" {
   const mode = raw || "none";
-  if (mode === "none" || mode === "fake") return mode;
-  throw new Error(
-    `SOLANA_GATEWAY=${mode} is not supported yet (real @hedged/solana gateway pending); use none or fake`,
-  );
+  if (mode === "none" || mode === "fake" || mode === "real") return mode;
+  throw new Error(`Invalid SOLANA_GATEWAY=${mode}: use none, fake or real`);
 }

@@ -129,6 +129,12 @@ export function createDesk(deps: DeskDeps) {
     const skipped: string[] = [];
     for (const e of await collect()) {
       if (!e.live) continue; // event settled: nothing left to hedge
+      if (!e.info) {
+        // Without event info we can't tell if netting applies; trading anyway could buy the full
+        // gross exposure and sell it back once info returns. Wait for the next pass instead.
+        skipped.push(`${e.eventTicker}: event info unavailable`);
+        continue;
+      }
       for (const order of planOrders(compute(e), lotH)) {
         orders++;
         let book;

@@ -119,6 +119,9 @@ export function registerMarketRoutes(
     Querystring: { team?: string; refundAmount?: string; maxCostBps?: string };
   }>("/api/events/:ticker/lines", async (req, reply) => {
     const { team, refundAmount = "5000000", maxCostBps = "4000" } = req.query;
+    if (!/^[A-Za-z0-9._-]{1,80}$/.test(req.params.ticker)) {
+      return reply.code(400).send({ error: "invalid_event_ticker" });
+    }
     if (!UINT_RE.test(refundAmount) || BigInt(refundAmount) === 0n) {
       return reply.code(400).send({ error: "invalid_refund_amount" });
     }
