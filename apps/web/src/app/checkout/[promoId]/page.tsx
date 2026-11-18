@@ -1,19 +1,15 @@
 import Link from "next/link";
 import { DevnetBanner } from "@/components/devnet-banner";
 import { WalletButton } from "@/components/wallet-button";
+import { DEMO_PROMOTION } from "@/lib/fixtures/promotions";
+import { DEMO_PURCHASE } from "@/lib/fixtures/purchases";
+import { formatTokenAmount } from "@/lib/format";
 
-// Presentational checkout shell. No promotion API or deposit transaction is connected yet, so every
-// promotion detail shows as unavailable. Nothing here is a real offer, price, or quote.
+// Presentational checkout shell. No promotion API or deposit transaction is connected yet.
+// Only the exact id "demo" shows the labeled DEMO_PROMOTION fixture; every other id keeps showing
+// "Unavailable". Nothing here is a real offer, price, or quote, and no payment can be made.
 // TODO(Dev 1): load the promotion via REST (GET /api/promotions/:id) once Dev 4 documents the DTOs.
 // TODO(Dev 1): deposit flow via the @hedged/solana browser-safe transaction builders (Dev 3).
-
-const DETAILS = [
-  { label: "Promotion name" },
-  { label: "Product or service" },
-  { label: "Purchase price" },
-  { label: "Refund condition" },
-  { label: "Promotion expiration" },
-];
 
 const STEPS = [
   {
@@ -36,6 +32,34 @@ const STEPS = [
 
 export default async function CheckoutPage({ params }: { params: Promise<{ promoId: string }> }) {
   const { promoId } = await params;
+
+  // Only the exact demo id gets the fixture. Unknown ids never fall back to it.
+  const demo = promoId === DEMO_PROMOTION.id ? DEMO_PROMOTION : null;
+  // The example receipt link exists only for the demo promotion (and only if the fixtures match).
+  const exampleReceiptId = demo && DEMO_PURCHASE.promotionId === demo.id ? DEMO_PURCHASE.id : null;
+
+  const rows: { label: string; value: string | undefined }[] = [
+    { label: "Promotion name", value: demo?.name },
+    { label: "Merchant", value: demo?.merchantName },
+    { label: "Product or service", value: demo?.description },
+    {
+      label: "Purchase price (mock USDC)",
+      value: demo ? formatTokenAmount(demo.offerAmount) : undefined,
+    },
+    {
+      label: "Refund condition",
+      value: demo ? `If ${demo.refundCondition}, you are refunded.` : undefined,
+    },
+    {
+      label: "Promotion expiration",
+      value: demo
+        ? `${new Date(demo.expiresAt).toLocaleDateString("en-US", {
+            dateStyle: "long",
+            timeZone: "UTC",
+          })} (UTC)`
+        : undefined,
+    },
+  ];
 
   return (
     <div className="min-h-screen bg-stone-50">
@@ -66,19 +90,45 @@ export default async function CheckoutPage({ params }: { params: Promise<{ promo
             <h2 id="details-heading" className="text-lg font-semibold text-stone-900">
               Promotion Details
             </h2>
-            <span className="rounded-full bg-stone-100 px-2.5 py-0.5 text-xs font-medium text-stone-600">
-              Data not connected
-            </span>
+            {demo ? (
+              <span className="rounded-full bg-orange-100 px-2.5 py-1 text-xs font-bold uppercase tracking-wide text-orange-800 ring-1 ring-inset ring-orange-300">
+                Demo data
+              </span>
+            ) : (
+              <span className="rounded-full bg-stone-100 px-2.5 py-0.5 text-xs font-medium text-stone-600">
+                Data not connected
+              </span>
+            )}
           </div>
           <p className="mt-1 break-all text-xs text-stone-500">
             Reference from link (unverified): <span className="font-mono">{promoId}</span>
           </p>
 
+          {demo && (
+            <div className="mt-4 rounded-lg border border-orange-200 bg-orange-50 p-4 text-sm leading-relaxed text-orange-900">
+              <p className="font-medium">This is a fictional promotion for UI demonstration.</p>
+              <ul className="mt-2 list-disc space-y-1 pl-5">
+                <li>It has not been published on-chain or saved to the backend.</li>
+                <li>It has no real Gemini market associated with it.</li>
+                <li>No payment can be made for this example.</li>
+              </ul>
+            </div>
+          )}
+
           <dl className="mt-5 divide-y divide-stone-100">
-            {DETAILS.map((item) => (
-              <div key={item.label} className="flex items-baseline justify-between gap-4 py-3">
-                <dt className="text-sm font-medium text-stone-600">{item.label}</dt>
-                <dd className="text-sm text-stone-400">Unavailable</dd>
+            {rows.map((row) => (
+              <div
+                key={row.label}
+                className="flex flex-col gap-1 py-3 sm:flex-row sm:items-baseline sm:justify-between sm:gap-6"
+              >
+                <dt className="shrink-0 text-sm font-medium text-stone-600">{row.label}</dt>
+                <dd className="min-w-0 break-words text-sm sm:text-right">
+                  {row.value ? (
+                    <span className="font-medium text-stone-900">{row.value}</span>
+                  ) : (
+                    <span className="text-stone-400">Unavailable</span>
+                  )}
+                </dd>
               </div>
             ))}
           </dl>
@@ -95,7 +145,7 @@ export default async function CheckoutPage({ params }: { params: Promise<{ promo
           <p className="mt-1 text-sm leading-relaxed text-stone-600">
             You need a Solana wallet set to <strong>Devnet</strong>. To check out you will also need
             mock USDC for the purchase and a little Devnet SOL for network fees. Both are free test
-            tokens with no real value.
+            tokens with no real value. Connecting a wallet does not start a payment.
           </p>
           <div className="mt-4">
             <WalletButton />
@@ -129,9 +179,35 @@ export default async function CheckoutPage({ params }: { params: Promise<{ promo
             Checkout not available yet
           </h2>
           <p className="mx-auto mt-1 max-w-md text-sm text-stone-600">
-            Promotion loading and the deposit transaction are not connected yet, so no payment can
-            be made from this page.
+            {demo
+              ? "The demo promotion cannot accept deposits, and the Solana transaction SDK is not integrated yet, so no payment can be made."
+              : "Promotion loading and the deposit transaction are not connected yet, so no payment can be made from this page."}
           </p>
+          {demo && (
+            <button
+              type="button"
+              disabled
+              className="mt-5 cursor-not-allowed rounded-lg bg-stone-200 px-4 py-2.5 text-sm font-semibold text-stone-500"
+            >
+              Pay with mock USDC
+            </button>
+          )}
+          {exampleReceiptId && (
+            <div className="mt-6 border-t border-stone-100 pt-5">
+              {/* Navigation only: opens a fictional receipt. Nothing is purchased or paid. */}
+              <Link
+                href={`/purchases/${exampleReceiptId}`}
+                className="inline-flex items-center justify-center rounded-lg border border-stone-300 bg-white px-4 py-2 text-sm font-semibold text-violet-800 transition-colors hover:border-violet-300 hover:bg-violet-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-500"
+              >
+                View Example Receipt
+              </Link>
+              <p className="mx-auto mt-2 max-w-md text-xs leading-relaxed text-stone-500">
+                The example receipt is fictional. No mock USDC deposit occurred, and viewing it does
+                not make a purchase or process a payment. It only demonstrates how purchase status
+                could be displayed in the future.
+              </p>
+            </div>
+          )}
         </section>
       </main>
     </div>

@@ -3,14 +3,42 @@
 import Link from "next/link";
 import { useState, type ReactNode } from "react";
 import { DevnetBanner } from "@/components/devnet-banner";
+import { MOCK_USD_DECIMALS, type PriceMicroUsd, type TokenBaseUnits } from "@hedged/shared";
 import { formatTokenAmount } from "@/lib/format";
 
-// Draft configuration UI only. Values live in local React state: nothing is sent to an API, the
-// blockchain, or a database. All inputs are plain strings exactly as typed by the merchant.
-// Validation below checks the typed strings directly (no floating-point math on money).
-// TODO(Dev 1): convert to base units / micro-USD and submit once the REST DTOs exist.
+// Draft configuration UI only. Form values live in React state. "Save Demo Draft" validates every
+// field and stores a frontend-only record in this browser tab's sessionStorage. Nothing is sent to
+// an API, the blockchain, or a database, and the draft is NOT a published or on-chain promotion.
+// All inputs are plain strings; validation and unit conversion work on the strings with BigInt
+// (no floating-point math on money).
+// TODO(Dev 1): replace the sessionStorage save with the real create flow once the REST DTOs and
+// the Solana SDK builders exist.
 
-const MOCK_USD_DECIMALS = 6; // mock USDC precision (same as MOCK_USD_DECIMALS in @hedged/shared)
+/** Namespaced sessionStorage key. Holds ONE draft (the latest save). Temporary demo storage. */
+const DRAFT_STORAGE_KEY = "wincentive:demo:promotion-draft";
+
+/** Frontend-only draft record. Not a backend request schema. */
+interface DemoPromotionDraft {
+  isDemoDraft: true;
+  draftId: string;
+  savedAt: string; // ISO timestamp
+  name: string;
+  description: string;
+  /** Mock USDC base units (6 decimals). */
+  offerAmount: TokenBaseUnits;
+  /** Typed by the merchant. Never checked against Gemini. */
+  geminiMarketId: string;
+  geminiMarketIdStatus: "UNVERIFIED";
+  /** Merchant's own label for the refund outcome. Not a verified Gemini outcome. */
+  refundTrigger: string;
+  refundTriggerStatus: "UNVERIFIED";
+  /** Micro-USD per $1-payout contract. */
+  maxHedgePriceMicroUsd: PriceMicroUsd;
+  /** Mock USDC base units. */
+  hedgeBudget: TokenBaseUnits;
+  /** ISO 8601 UTC, converted from the browser-local datetime-local value. */
+  expiresAt: string;
+}
 
 type FormValues = {
   name: string;
@@ -67,13 +95,27 @@ function positiveAmount(raw: string, label: string): string | undefined {
  */
 function previewPrice(raw: string): string | null {
   if (positiveAmount(raw, "Purchase price")) return null; // empty or invalid
-  const [whole = "", frac = ""] = raw.trim().split(".");
-  const baseUnits = BigInt(whole + frac.padEnd(MOCK_USD_DECIMALS, "0"));
+  const baseUnits = BigInt(decimalToBaseUnits(raw));
   const centInBaseUnits = 10n ** BigInt(MOCK_USD_DECIMALS - 2);
   if (baseUnits % centInBaseUnits === 0n) return formatTokenAmount(baseUnits.toString());
   const digits = baseUnits.toString().padStart(MOCK_USD_DECIMALS + 1, "0");
   const exactFrac = digits.slice(-MOCK_USD_DECIMALS).replace(/0+$/, "");
   return `$${digits.slice(0, -MOCK_USD_DECIMALS)}.${exactFrac}`;
+}
+
+/**
+ * Converts an already-validated decimal string (up to 6 decimals) to integer base units, e.g.
+ * "5.25" -> "5250000". String padding + BigInt only, so there is no floating-point rounding.
+ * The same 6-decimal scale serves mock USDC base units and micro-USD prices.
+ */
+function decimalToBaseUnits(raw: string): string {
+  const [whole = "", frac = ""] = raw.trim().split(".");
+  return BigInt(whole + frac.padEnd(MOCK_USD_DECIMALS, "0")).toString();
+}
+
+function newDraftId(): string {
+  if (typeof crypto !== "undefined" && "randomUUID" in crypto) return crypto.randomUUID();
+  return `draft-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
 }
 
 /** Price per $1 of payout: greater than 0 and at most 1 (so exactly "1", "1.0", ... is the top). */
@@ -177,6 +219,10 @@ export default function NewPromotionPage() {
   });
   // A field is "touched" once the user has left it (blur). Errors only show for touched fields.
   const [touched, setTouched] = useState<Partial<Record<FieldKey, boolean>>>({});
+  // Result of the last "Save Demo Draft" click. Reset to idle as soon as the form is edited.
+  const [save, setSave] = useState<
+    { status: "idle" } | { status: "saved"; draftId: string } | { status: "error" }
+  >({ status: "idle" });
 
   // Errors are recomputed from the current values on every render, so they update and disappear
   // as soon as the user corrects a field.
@@ -190,12 +236,73 @@ export default function NewPromotionPage() {
       id: key,
       value: form[key],
       className: `${INPUT_BASE} ${error ? INPUT_INVALID : INPUT_OK}`,
-      onChange: (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
-        setForm((prev) => ({ ...prev, [key]: e.target.value })),
+      onChange: (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+        setForm((prev) => ({ ...prev, [key]: e.target.value }));
+        setSave({ status: "idle" }); // editing clears any "saved" message
+      },
       onBlur: () => setTouched((prev) => ({ ...prev, [key]: true })),
       "aria-invalid": error ? true : undefined,
       "aria-describedby": error ? `${key}-error ${key}-help` : `${key}-help`,
     };
+  };
+
+  // Runs for the Save button AND the Enter key (both submit the form).
+  const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+
+    // Show every field's error, including fields the user never touched.
+    setTouched({
+      name: true,
+      description: true,
+      price: true,
+      marketId: true,
+      refundTrigger: true,
+      maxHedgePrice: true,
+      budget: true,
+      expiresAt: true,
+    });
+
+    // Invalid data is never saved. Move focus to the first invalid field (in on-screen order).
+    const screenOrder: FieldKey[] = [
+      "name",
+      "description",
+      "price",
+      "expiresAt",
+      "marketId",
+      "refundTrigger",
+      "maxHedgePrice",
+      "budget",
+    ];
+    const firstInvalid = screenOrder.find((key) => allErrors[key]);
+    if (firstInvalid) {
+      setSave({ status: "idle" });
+      document.getElementById(firstInvalid)?.focus();
+      return;
+    }
+
+    const draft: DemoPromotionDraft = {
+      isDemoDraft: true,
+      draftId: newDraftId(),
+      savedAt: new Date().toISOString(),
+      name: form.name.trim(),
+      description: form.description.trim(),
+      offerAmount: decimalToBaseUnits(form.price),
+      geminiMarketId: form.marketId.trim(),
+      geminiMarketIdStatus: "UNVERIFIED",
+      refundTrigger: form.refundTrigger.trim(),
+      refundTriggerStatus: "UNVERIFIED",
+      maxHedgePriceMicroUsd: decimalToBaseUnits(form.maxHedgePrice),
+      hedgeBudget: decimalToBaseUnits(form.budget),
+      expiresAt: new Date(form.expiresAt).toISOString(),
+    };
+
+    try {
+      sessionStorage.setItem(DRAFT_STORAGE_KEY, JSON.stringify(draft));
+      setSave({ status: "saved", draftId: draft.draftId });
+    } catch {
+      // Storage can be blocked or full (e.g. private mode). Do not claim it was saved.
+      setSave({ status: "error" });
+    }
   };
 
   return (
@@ -219,7 +326,7 @@ export default function NewPromotionPage() {
             Create Promotion
           </h1>
           <p className="mt-3 inline-block rounded-full bg-orange-100 px-3 py-1 text-xs font-medium text-orange-800">
-            Draft configuration · nothing is saved or submitted
+            Draft configuration · not published
           </p>
           <p className="mt-3 max-w-2xl text-base leading-relaxed text-stone-600">
             Configure an outcome-based refund offer for any product or service. Hedging against the
@@ -228,7 +335,7 @@ export default function NewPromotionPage() {
           </p>
         </header>
 
-        <form className="mt-8 space-y-6" onSubmit={(e) => e.preventDefault()}>
+        <form className="mt-8 space-y-6" onSubmit={handleSubmit} noValidate>
           <Section title="Offer" intro="What you are selling and what customers pay.">
             <div className="sm:col-span-2">
               <Field
@@ -342,10 +449,42 @@ export default function NewPromotionPage() {
             </Field>
           </Section>
 
-          <p className="rounded-xl border border-dashed border-violet-300 bg-white px-5 py-4 text-sm text-stone-600">
-            Submitting promotions is not implemented yet, so there is no Create button. No odds or
-            cost estimates are shown because no live market data is connected.
-          </p>
+          <div className="rounded-xl border border-dashed border-violet-300 bg-white px-5 py-5">
+            <p className="text-sm text-stone-600">
+              Saving stores a demo draft in this browser session only. Publishing promotions is not
+              implemented yet. No odds or cost estimates are shown because no live market data is
+              connected.
+            </p>
+            <button
+              type="submit"
+              className="mt-4 rounded-lg bg-violet-700 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-violet-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-500"
+            >
+              Save Demo Draft
+            </button>
+
+            <div role="status" aria-live="polite">
+              {save.status === "saved" && (
+                <div className="mt-4 rounded-lg border border-emerald-200 bg-emerald-50 p-4 text-sm leading-relaxed text-emerald-900">
+                  <p className="font-medium">Demo draft saved in this browser session.</p>
+                  <p className="mt-1">
+                    This promotion is <strong>not published</strong>,{" "}
+                    <strong>not stored on-chain</strong>, and{" "}
+                    <strong>not available for real checkout</strong>. The market ID and refund
+                    trigger are unverified.
+                  </p>
+                  <p className="mt-1 break-all text-xs text-emerald-800">
+                    Draft ID: <span className="font-mono">{save.draftId}</span>
+                  </p>
+                </div>
+              )}
+              {save.status === "error" && (
+                <p className="mt-4 rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-800">
+                  Could not save the demo draft: this browser blocked session storage. Nothing was
+                  saved.
+                </p>
+              )}
+            </div>
+          </div>
         </form>
 
         <section aria-labelledby="preview-heading" className="mt-10">

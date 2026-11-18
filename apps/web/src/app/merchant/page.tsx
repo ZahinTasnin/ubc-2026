@@ -1,7 +1,11 @@
 import Link from "next/link";
 import { DevnetBanner } from "@/components/devnet-banner";
+import { SavedDraftCard } from "@/components/merchant/SavedDraftCard";
+import { DEMO_PROMOTION } from "@/lib/fixtures/promotions";
+import { formatTokenAmount } from "@/lib/format";
 
-// Presentational only. No API or fixture data is connected yet, so every figure shows as unavailable.
+// Presentational only. No API is connected, so the overview figures show as unavailable. The one
+// promotion card below is the labeled DEMO_PROMOTION fixture; it is not counted in any figure.
 // TODO(Dev 1): wire to the REST API (GET /api/merchants/:id/dashboard) once Dev 4 documents the DTOs.
 
 const OVERVIEW_CARDS = [
@@ -50,14 +54,22 @@ export default function MerchantPage() {
               outcome goes their way, while tracking how the promotion is modeled to be hedged.
             </p>
           </div>
-          {/* Navigation only: opens the draft form. Nothing is created or published by clicking. */}
-          <Link
-            href="/merchant/new"
-            className="inline-flex shrink-0 items-center justify-center gap-2 self-start rounded-lg bg-violet-700 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-violet-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-500 sm:self-auto"
-          >
-            <span aria-hidden className="h-2 w-2 rounded-sm bg-orange-400" />
-            Create Promotion
-          </Link>
+          {/* Navigation only. Nothing is created, published or claimed by clicking these. */}
+          <nav aria-label="Merchant actions" className="flex shrink-0 flex-wrap items-center gap-3">
+            <Link
+              href="/merchant/new"
+              className="inline-flex items-center justify-center gap-2 rounded-lg bg-violet-700 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-violet-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-500"
+            >
+              <span aria-hidden className="h-2 w-2 rounded-sm bg-orange-400" />
+              Create Promotion
+            </Link>
+            <Link
+              href="/merchant/claims"
+              className="inline-flex items-center justify-center rounded-lg border border-stone-300 bg-white px-4 py-2.5 text-sm font-semibold text-violet-800 transition-colors hover:border-violet-300 hover:bg-violet-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-500"
+            >
+              Merchant Claims
+            </Link>
+          </nav>
         </header>
 
         {/* Overview */}
@@ -92,25 +104,79 @@ export default function MerchantPage() {
           <h2 id="promotions-heading" className="text-xl font-semibold text-stone-900">
             Your Promotions
           </h2>
-          <div className="mt-4 rounded-xl border border-dashed border-violet-300 bg-white px-6 py-14 text-center">
-            <div
-              aria-hidden
-              className="mx-auto flex h-10 w-10 items-center justify-center rounded-full bg-violet-100 text-violet-700"
-            >
-              ◇
+          <p className="mt-1 text-sm text-stone-600">
+            Live promotion data is not connected yet. Nothing below is a published or on-chain
+            promotion, and none of it is counted in the overview.
+          </p>
+
+          {/* Client component: shows the draft saved in this browser session, if there is one. */}
+          <SavedDraftCard />
+
+          <p className="mt-6 text-xs font-medium uppercase tracking-wide text-stone-500">
+            Sample promotion (fictional UI example)
+          </p>
+          <article className="mt-2 rounded-xl border border-stone-200 bg-white p-5 shadow-sm sm:p-6">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div className="min-w-0">
+                <h3 className="break-words text-lg font-semibold text-stone-900">
+                  {DEMO_PROMOTION.name}
+                </h3>
+                <p className="mt-0.5 text-sm text-stone-500">{DEMO_PROMOTION.merchantName}</p>
+              </div>
+              <span className="rounded-full bg-orange-100 px-2.5 py-1 text-xs font-bold uppercase tracking-wide text-orange-800 ring-1 ring-inset ring-orange-300">
+                Demo data
+              </span>
             </div>
-            <p className="mt-4 font-medium text-stone-900">No promotion data loaded yet</p>
-            <p className="mx-auto mt-1 max-w-md text-sm text-stone-600">
-              Your promotions will appear here once the dashboard is connected to the backend.
+
+            <p className="mt-3 text-sm leading-relaxed text-stone-600">
+              {DEMO_PROMOTION.description}
             </p>
-            {/* Navigation only: opens the draft form. */}
-            <Link
-              href="/merchant/new"
-              className="mt-6 inline-flex items-center justify-center rounded-lg border border-violet-300 bg-white px-4 py-2 text-sm font-semibold text-violet-800 transition-colors hover:border-violet-400 hover:bg-violet-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-500"
-            >
-              Create Your First Promotion
-            </Link>
-          </div>
+
+            <dl className="mt-5 grid gap-4 sm:grid-cols-3">
+              <div className="rounded-lg bg-stone-50 p-3">
+                <dt className="text-xs font-medium uppercase tracking-wide text-stone-500">
+                  Purchase price
+                </dt>
+                <dd className="mt-1 text-lg font-semibold text-violet-900">
+                  {formatTokenAmount(DEMO_PROMOTION.offerAmount)}
+                </dd>
+                <dd className="text-xs text-stone-500">mock USDC</dd>
+              </div>
+              <div className="rounded-lg bg-stone-50 p-3">
+                <dt className="text-xs font-medium uppercase tracking-wide text-stone-500">
+                  Refund condition
+                </dt>
+                <dd className="mt-1 break-words text-sm text-stone-800">
+                  If {DEMO_PROMOTION.refundCondition}, the customer is refunded.
+                </dd>
+              </div>
+              <div className="rounded-lg bg-stone-50 p-3">
+                <dt className="text-xs font-medium uppercase tracking-wide text-stone-500">
+                  Expires
+                </dt>
+                <dd className="mt-1 text-sm text-stone-800">
+                  {new Date(DEMO_PROMOTION.expiresAt).toLocaleDateString("en-US", {
+                    dateStyle: "long",
+                    timeZone: "UTC",
+                  })}{" "}
+                  <span className="text-xs text-stone-500">(UTC)</span>
+                </dd>
+              </div>
+            </dl>
+
+            <div className="mt-5 flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-stone-100 pt-4">
+              {/* Navigation only: opens the demo checkout page. */}
+              <Link
+                href={`/checkout/${DEMO_PROMOTION.id}`}
+                className="inline-flex items-center justify-center rounded-lg border border-violet-300 bg-white px-4 py-2 text-sm font-semibold text-violet-800 transition-colors hover:border-violet-400 hover:bg-violet-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-500"
+              >
+                View Demo Checkout
+              </Link>
+              <p className="text-xs text-stone-500">
+                Fictional example. Devnet test tokens only; hedging would be simulated.
+              </p>
+            </div>
+          </article>
         </section>
 
         {/* How it works */}
