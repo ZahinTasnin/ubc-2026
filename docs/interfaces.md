@@ -246,6 +246,10 @@ offerAmount, depositDeadline, maxYesPriceMicroUsd, hedgeBudget }` → 201
 No login in the MVP: drafts are harmless until the merchant's own wallet signs `initialize_promo`,
 and dashboard data is derivable from public chain data and public Gemini prices.
 
+- `GET /api/desk` → exposure desk (simulated): per Gemini event, `exclusive` (full-game moneyline),
+  per-contract `liability` / `target` / `position` / `gap`, `certainLiability` (netted, paid from
+  premiums), `premiumsCollected`, `deskCost`, `savings`, `pnlIfWins` per side and `covered`.
+  See `apps/api/src/desk/README.md`. 503 when the desk is off.
 - `GET /api/purchases/:purchasePda` → customer receipt / barista screen: off-chain `status` and
   on-chain `onChainState` side by side, `step` (PROCESSING | HEDGED | REFUNDING | REFUND_READY |
   REFUNDED | WAITING_FOR_RESULT | YOU_WON | NOT_THIS_TIME | DONE), `canServe` (hand over the item

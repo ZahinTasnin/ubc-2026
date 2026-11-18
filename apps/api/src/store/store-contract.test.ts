@@ -236,6 +236,32 @@ function contract(name: string, store: Store) {
     assert.equal(s?.virtualPayout, 4_510_000n);
   });
 
+  test(`[${name}] desk fills round-trip and filter by event`, async () => {
+    const ev = tag(`EVT_${name}`);
+    const fill = await store.recordDeskFill({
+      eventTicker: ev,
+      marketId: tag(`GEMI-${name}-TEX`),
+      side: "BUY",
+      contracts: "200.5",
+      amount: 184_460_000n,
+      avgPriceMicroUsd: "920000",
+      quoteFetchedAt: new Date().toISOString(),
+    });
+    assert.equal(fill.simulated, true);
+    assert.equal(fill.contracts, "200.5");
+    assert.equal(fill.amount, 184_460_000n);
+    await store.recordDeskFill({ ...fill, side: "SELL", contracts: "10" });
+    const mine = await store.listDeskFills(ev);
+    assert.deepEqual(
+      mine.map((f) => [f.side, f.contracts]),
+      [
+        ["BUY", "200.5"],
+        ["SELL", "10"],
+      ],
+    );
+    assert.ok((await store.listDeskFills()).length >= 2);
+  });
+
   test(`[${name}] events dedupe, checkpoints never go backwards, outcomes upsert`, async () => {
     const id = `${tag("EVSIG")}:0`;
     assert.equal(await store.markEventProcessed(id, "ClaimEvent", 5, { a: 1 }), true);
@@ -280,6 +306,7 @@ if (url && key) {
     await db.from("chain_events").delete().like("event_id", like);
     await db.from("checkpoints").delete().like("name", like);
     await db.from("merchants").delete().like("pubkey", like);
+    await db.from("desk_fills").delete().like("event_ticker", like);
   });
 } else {
   test(
