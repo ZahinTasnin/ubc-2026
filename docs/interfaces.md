@@ -246,10 +246,15 @@ offerAmount, depositDeadline, maxYesPriceMicroUsd, hedgeBudget }` → 201
 No login in the MVP: drafts are harmless until the merchant's own wallet signs `initialize_promo`,
 and dashboard data is derivable from public chain data and public Gemini prices.
 
-Still 501: `GET /api/purchases/:id`. Remaining DTOs: **TODO (Dev 4 proposes, Dev 1 agrees; put in
-`@hedged/shared`)**. Never trust client-submitted `HEDGED`, `REFUNDED`, outcome, or price fields;
-never return simulated data as live. Purchase DTOs must expose both the off-chain `status` and the
-on-chain `state`.
+- `GET /api/purchases/:purchasePda` → customer receipt / barista screen: off-chain `status` and
+  on-chain `onChainState` side by side, `step` (PROCESSING | HEDGED | REFUNDING | REFUND_READY |
+  REFUNDED | WAITING_FOR_RESULT | YOU_WON | NOT_THIS_TIME | DONE), `canServe` (hand over the item
+  only when true), `message`, promotion summary, the simulated `hedge` with its sha256
+  `fingerprint` (recomputable from the hedge fields; proposed to go on-chain with `mark_hedged`),
+  and transaction signatures.
+
+Never trust client-submitted `HEDGED`, `REFUNDED`, outcome, or price fields; never return simulated
+data as live.
 
 ## 7. Shared types (`@hedged/shared`)
 

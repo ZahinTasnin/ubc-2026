@@ -25,6 +25,6 @@ export async function buildServer(config: ApiConfig, deps: ServerDeps): Promise<
   registerHealthRoute(app);
   registerMarketRoutes(app, gemini, config.hedge);
   registerPromotionRoutes(app, { gemini, store: deps.store, gateway: deps.gateway });
-  registerPurchaseRoutes(app);
+  registerPurchaseRoutes(app, { store: deps.store });
   return app;
 }
