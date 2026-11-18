@@ -86,6 +86,21 @@ export interface GeminiAdapter {
    * then, since they are not about one team.
    */
   listGameLines(eventTicker: string, opts?: { team?: string }): Promise<GameLine[]>;
+  /** An event's outcomes and whether exactly one of them can resolve YES. */
+  getEventInfo(eventTicker: string): Promise<EventInfo>;
+  /** Both sides of a contract's live book (asks best=lowest first, bids best=highest first). */
+  getBook(marketId: string): Promise<{ asks: QuoteLevel[]; bids: QuoteLevel[]; fetchedAt: string }>;
+}
+
+export interface EventInfo {
+  eventTicker: string;
+  title: string;
+  /**
+   * True only for full-game moneylines (Gemini `sportsMarket.type = "moneyline"`): at most one team
+   * wins. Spreads/totals can have several YES lines at once and are never netted.
+   */
+  exclusive: boolean;
+  contracts: { marketId: string; label: string }[];
 }
 
 export interface GameLine {
@@ -257,6 +272,30 @@ export function createGeminiAdapter(
       );
     },
 
+    async getEventInfo(eventTicker) {
+      const e = await client.get<RawEvent>(
+        `/v1/prediction-markets/events/${encodeURIComponent(eventTicker)}`,
+      );
+      return {
+        eventTicker: e.ticker,
+        title: e.title,
+        exclusive:
+          e.sportsMarket?.type === "moneyline" && e.sportsMarket?.scope?.type === "full_contest",
+        contracts: (e.contracts ?? [])
+          .filter((c) => c.instrumentSymbol)
+          .map((c) => ({ marketId: c.instrumentSymbol, label: c.label })),
+      };
+    },
+
+    async getBook(marketId) {
+      const { contract } = await getContract(marketId);
+      if (contract.marketState !== "open") {
+        throw new MarketNotOpenError(marketId, contract.marketState);
+      }
+      const book = await client.get<RawBook>(`/v1/book/${encodeURIComponent(marketId)}`);
+      return { asks: parseAsks(book), bids: parseBids(book), fetchedAt: now().toISOString() };
+    },
+
     async getOutcome(marketId) {
       const { contract } = await getContract(marketId);
       const side = contract.resolutionSide;
@@ -298,6 +337,15 @@ function toSummary(event: RawEvent, c: RawContract, fetchedAt: string): MarketSu
     marketKind: UP_DOWN_TICKER.test(event.ticker) ? "UP_DOWN" : "STANDARD",
     fetchedAt,
   };
+}
+
+/** Bid side of a Gemini book, best (highest) price first, empty levels dropped. */
+function parseBids(book: RawBook): QuoteLevel[] {
+  return (book.bids ?? [])
+    .map((b) => ({ price: usdToMicro(b.price), qty: qtyToHundredths(b.amount) }))
+    .filter((b) => b.qty > 0n)
+    .sort((a, b) => (a.price > b.price ? -1 : a.price < b.price ? 1 : 0))
+    .map((b) => ({ priceMicroUsd: b.price.toString(), quantity: hundredthsToQty(b.qty) }));
 }
 
 /** Ask side of a Gemini book, best (lowest) price first, empty levels dropped. */

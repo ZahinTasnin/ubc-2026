@@ -9,8 +9,11 @@ import { registerMarketRoutes } from "./routes/markets";
 import { registerPromotionRoutes } from "./routes/promotions";
 import { registerPurchaseRoutes } from "./routes/purchases";
 import type { Store } from "./store/types";
+import type { Desk } from "./desk/run";
 
 export interface ServerDeps {
+  /** Exposure desk; GET /api/desk returns 503 when absent. */
+  desk?: Desk;
   gemini?: GeminiAdapter;
   store: Store;
   /** null when SOLANA_GATEWAY=none: promos can be drafted but not confirmed. */
@@ -26,5 +29,9 @@ export async function buildServer(config: ApiConfig, deps: ServerDeps): Promise<
   registerMarketRoutes(app, gemini, config.hedge);
   registerPromotionRoutes(app, { gemini, store: deps.store, gateway: deps.gateway });
   registerPurchaseRoutes(app, { store: deps.store });
+  // Exposure desk: net exposure of all shops per Gemini event and its simulated hedges.
+  app.get("/api/desk", async (_req, reply) =>
+    deps.desk ? deps.desk.snapshot() : reply.code(503).send({ error: "desk_disabled" }),
+  );
   return app;
 }

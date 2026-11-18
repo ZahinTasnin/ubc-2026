@@ -4,6 +4,7 @@ import { createGeminiClient } from "./gemini/client";
 import { FakeSolanaGateway } from "./orchestration/fake-gateway";
 import { createOrchestrator } from "./orchestration/orchestrator";
 import { startWorkers, type RunningWorkers } from "./orchestration/workers";
+import { createDesk } from "./desk/run";
 import { buildServer } from "./server";
 import { MemoryStore } from "./store/memory-store";
 import { createSupabaseStore } from "./store/supabase-store";
@@ -18,7 +19,12 @@ const gateway =
   config.workers.gateway === "fake"
     ? new FakeSolanaGateway(() => Math.floor(Date.now() / 1000))
     : null;
-const app = await buildServer(config, { gemini, store, gateway });
+const desk = createDesk({
+  store,
+  gemini,
+  lotContracts: config.desk.lotContracts,
+});
+const app = await buildServer(config, { gemini, store, gateway, desk });
 if (config.supabase) {
   app.log.info({ supabase: new URL(config.supabase.url).host }, "using Supabase store");
 } else {
@@ -53,6 +59,8 @@ try {
       log: app.log,
       resolvePollMs: config.workers.resolvePollMs,
       reconcileMs: config.workers.reconcileMs,
+      desk,
+      deskMs: config.desk.rebalanceMs,
     });
   } else {
     app.log.info("SOLANA_GATEWAY=none: background workers disabled");

@@ -109,6 +109,24 @@ export type NewHedge = Omit<
   "id" | "reservedPremium" | "virtualPayout" | "settledAt" | "simulated"
 >;
 
+/** One SIMULATED exposure-desk trade (no Gemini order is placed). */
+export interface DeskFillRow {
+  id: string;
+  simulated: true;
+  eventTicker: string;
+  marketId: string;
+  side: "BUY" | "SELL";
+  /** Contracts (decimal string, 0.01 steps). */
+  contracts: string;
+  /** Base units paid (BUY) or received (SELL). */
+  amount: bigint;
+  avgPriceMicroUsd: string;
+  quoteFetchedAt: string;
+  createdAt: string;
+}
+
+export type NewDeskFill = Omit<DeskFillRow, "id" | "simulated" | "createdAt">;
+
 export class BudgetExceededError extends Error {
   constructor() {
     super("Simulated premium exceeds the promotion's remaining hedge budget");
@@ -212,6 +230,10 @@ export interface Store {
   ): Promise<void>;
 
   saveOutcome(outcome: MarketOutcome): Promise<void>;
+
+  recordDeskFill(fill: NewDeskFill): Promise<DeskFillRow>;
+  /** All desk fills, oldest first (optionally for one event). */
+  listDeskFills(eventTicker?: string): Promise<DeskFillRow[]>;
 
   /** Dedupe any verified chain event. Returns false if it was already recorded. */
   markEventProcessed(

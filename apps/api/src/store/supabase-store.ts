@@ -9,8 +9,10 @@ import { hundredthsToQty, qtyToHundredths } from "../gemini/decimal";
 import {
   BudgetExceededError,
   PromotionConflictError,
+  type DeskFillRow,
   type HedgeRow,
   type MerchantRow,
+  type NewDeskFill,
   type NewHedge,
   type NewPromotion,
   type PromotionRow,
@@ -95,6 +97,8 @@ const HEDGE_COLS = [
 ].join(",");
 
 const MERCHANT_COLS = "pubkey,shop_name,location,created_at";
+const DESK_COLS =
+  "id,event_ticker,market_id,side,contracts::text,amount::text,avg_price_micro_usd::text,quote_fetched_at,created_at";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const UNIQUE_VIOLATION = "23505";
@@ -443,6 +447,30 @@ export class SupabaseStore implements Store {
     check("saveOutcome", error);
   }
 
+  async recordDeskFill(f: NewDeskFill): Promise<DeskFillRow> {
+    const { data, error } = await this.db
+      .from("desk_fills")
+      .insert({
+        event_ticker: f.eventTicker,
+        market_id: f.marketId,
+        side: f.side,
+        contracts: f.contracts,
+        amount: f.amount.toString(),
+        avg_price_micro_usd: f.avgPriceMicroUsd,
+        quote_fetched_at: f.quoteFetchedAt,
+      })
+      .select(DESK_COLS)
+      .single();
+    return toDeskFill(must("recordDeskFill", data, error));
+  }
+
+  async listDeskFills(eventTicker?: string): Promise<DeskFillRow[]> {
+    let q = this.db.from("desk_fills").select(DESK_COLS).order("created_at", { ascending: true });
+    if (eventTicker) q = q.eq("event_ticker", eventTicker);
+    const { data, error } = await q;
+    return mustRows("listDeskFills", data, error).map(toDeskFill);
+  }
+
   async markEventProcessed(
     eventId: string,
     name: string,
@@ -593,6 +621,21 @@ function toHedge(r: Row): HedgeRow {
     assumptions: Array.isArray(r.assumptions) ? (r.assumptions as string[]) : [],
     quoteFetchedAt: str(r.quote_fetched_at),
     settledAt: str(r.settled_at),
+  };
+}
+
+function toDeskFill(r: Row): DeskFillRow {
+  return {
+    id: String(r.id),
+    simulated: true,
+    eventTicker: String(r.event_ticker),
+    marketId: String(r.market_id),
+    side: r.side as DeskFillRow["side"],
+    contracts: qty(r.contracts),
+    amount: big(r.amount),
+    avgPriceMicroUsd: String(r.avg_price_micro_usd),
+    quoteFetchedAt: String(r.quote_fetched_at),
+    createdAt: String(r.created_at),
   };
 }
 
