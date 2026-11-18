@@ -31,6 +31,12 @@ export interface OnChainPromoAccount {
   outstanding: TokenBaseUnits;
   /** Live SPL balance of the vault (must be >= outstanding). */
   vaultBalance: TokenBaseUnits;
+  /**
+   * Snapshot of Config.cancel_timeout_secs taken at initialize_promo (Promo.cancel_timeout_secs).
+   * A customer may cancel a still-Deposited purchase at depositedAt + this; Dev 4 stops starting
+   * hedges well before it (CLAUDE.md §5.1).
+   */
+  cancelTimeoutSecs: number;
 }
 
 export interface OnChainPurchaseAccount {

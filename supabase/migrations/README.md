@@ -1,8 +1,15 @@
 # supabase/migrations (Dev 4)
 
-PostgreSQL migrations. Suggested tables (CLAUDE.md §9): `promotions`, `purchases`,
-`simulated_hedges`, `market_quotes`, `market_outcomes`, processing checkpoints. Store Solana keys
-as text, money as integer base units (numeric/bigint), unique constraint on deposit event id
-`(tx_signature, event_index)`. No migrations yet.
+`20261117000000_init.sql`: `promotions`, `purchases`, `simulated_hedges`, `market_quotes`,
+`market_outcomes`, `chain_events`, `checkpoints`, plus atomic RPC functions:
 
-Required constraints: unique chain event id `(tx_signature, event_index)`; `simulated_hedges.purchase_id` unique (a retried `mark_hedged` must reuse the stored hedge); status values per `docs/workflow.md`.
+- `transition_purchase(pda, from[], to)`: compare-and-set status (one worker wins a lease).
+- `reserve_simulated_hedge(jsonb)`: insert the ONE hedge per purchase (`unique (purchase_id)`) and
+  reserve its premium against `promotions.hedge_budget` in the same transaction.
+- `void_simulated_hedge(id, reason)`: release a hedge's reservation (purchase cancelled).
+
+Constraints: unique `(deposit_tx_signature, deposit_event_index)`, unique `purchase_pda`,
+`simulated = true` enforced by a check, status values per `docs/workflow.md`. RLS is enabled with no
+policies, so only the server's service-role key can read or write.
+
+Status: written, **not yet applied** to a Supabase project or local Postgres.
