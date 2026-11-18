@@ -9,20 +9,24 @@ import { MemoryStore } from "./store/memory-store";
 
 const config = loadConfig();
 const gemini = createGeminiAdapter(createGeminiClient(config.gemini));
-const app = await buildServer(config, gemini);
+// TODO(Dev 4): Supabase-backed Store. Until then everything is in memory and lost on restart.
+const store = new MemoryStore();
+const gateway =
+  config.workers.gateway === "fake"
+    ? new FakeSolanaGateway(() => Math.floor(Date.now() / 1000))
+    : null;
+const app = await buildServer(config, { gemini, store, gateway });
+app.log.warn("Using the IN-MEMORY store: data is lost on restart (Supabase store pending).");
 
 let workers: RunningWorkers | null = null;
 
 try {
   await app.listen({ host: config.host, port: config.port });
 
-  if (config.workers.gateway === "fake") {
+  if (gateway) {
     app.log.warn(
-      "SOLANA_GATEWAY=fake: workers run against an IN-MEMORY FAKE chain and store. Not Solana; " +
-        "nothing is durable. Local testing only.",
+      "SOLANA_GATEWAY=fake: workers run against an IN-MEMORY FAKE chain. Not Solana. Local testing only.",
     );
-    const gateway = new FakeSolanaGateway(() => Math.floor(Date.now() / 1000));
-    const store = new MemoryStore();
     const orchestrator = createOrchestrator({
       store,
       gateway,

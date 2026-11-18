@@ -7,10 +7,13 @@ import {
 } from "@hedged/shared";
 import {
   BudgetExceededError,
+  PromotionConflictError,
   type HedgeRow,
+  type MerchantRow,
   type NewHedge,
   type NewPromotion,
   type PromotionRow,
+  type PromotionStatus,
   type PurchaseRow,
   type Store,
 } from "./types";
@@ -28,11 +31,26 @@ export class MemoryStore implements Store {
   readonly outcomes = new Map<string, MarketOutcome>();
   readonly events = new Set<string>();
   readonly checkpoints = new Map<string, number>();
+  readonly merchants = new Map<string, MerchantRow>();
+
+  async upsertMerchant(m: Omit<MerchantRow, "createdAt">): Promise<MerchantRow> {
+    const existing = this.merchants.get(m.pubkey);
+    const row: MerchantRow = { ...m, createdAt: existing?.createdAt ?? new Date().toISOString() };
+    this.merchants.set(m.pubkey, row);
+    return { ...row };
+  }
+
+  async getMerchant(pubkey: string) {
+    const m = this.merchants.get(pubkey);
+    return m ? { ...m } : null;
+  }
 
   async createPromotion(p: NewPromotion): Promise<PromotionRow> {
     const row: PromotionRow = {
       ...p,
       id: randomUUID(),
+      status: p.promoPda ? "ACTIVE" : "DRAFT",
+      createdAt: new Date().toISOString(),
       reservedPremium: 0n,
       onChainState: "Active",
       resolvedOutcome: null,
@@ -42,8 +60,32 @@ export class MemoryStore implements Store {
     return { ...row };
   }
 
+  async activatePromotion(id: string, onChain: { promoPda: string; mint: string }) {
+    const p = this.mustPromotion(id);
+    if (p.status === "ACTIVE") {
+      if (p.promoPda !== onChain.promoPda) {
+        throw new PromotionConflictError(`promotion ${id} already active as ${p.promoPda}`);
+      }
+      return { ...p };
+    }
+    const taken = [...this.promotions.values()].some((r) => r.promoPda === onChain.promoPda);
+    if (taken) throw new PromotionConflictError(`promo PDA ${onChain.promoPda} already registered`);
+    Object.assign(p, { status: "ACTIVE", promoPda: onChain.promoPda, mint: onChain.mint });
+    return { ...p };
+  }
+
+  async listPromotions(filter: { status?: PromotionStatus; merchant?: string } = {}) {
+    return [...this.promotions.values()]
+      .filter((p) => !filter.status || p.status === filter.status)
+      .filter((p) => !filter.merchant || p.merchant === filter.merchant)
+      .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
+      .map((p) => ({ ...p }));
+  }
+
   async getPromotionByPda(promoPda: string) {
-    const p = [...this.promotions.values()].find((r) => r.promoPda === promoPda);
+    const p = [...this.promotions.values()].find(
+      (r) => r.status === "ACTIVE" && r.promoPda === promoPda,
+    );
     return p ? { ...p } : null;
   }
 
@@ -54,13 +96,15 @@ export class MemoryStore implements Store {
 
   async listActivePromotions() {
     return [...this.promotions.values()]
-      .filter((p) => p.onChainState === "Active")
+      .filter((p) => p.status === "ACTIVE" && p.onChainState === "Active")
       .map((p) => ({ ...p }));
   }
 
   async listPromotionsDueForResolution(nowUnix: number) {
     return [...this.promotions.values()]
-      .filter((p) => p.onChainState === "Active" && nowUnix >= p.depositDeadline)
+      .filter(
+        (p) => p.status === "ACTIVE" && p.onChainState === "Active" && nowUnix >= p.depositDeadline,
+      )
       .map((p) => ({ ...p }));
   }
 
@@ -161,6 +205,12 @@ export class MemoryStore implements Store {
   async getHedgeByPurchase(purchaseId: string) {
     const h = [...this.hedges.values()].find((x) => x.purchaseId === purchaseId);
     return h ? { ...h } : null;
+  }
+
+  async listHedgesByPromotion(promotionId: string) {
+    return [...this.hedges.values()]
+      .filter((h) => h.promotionId === promotionId)
+      .map((h) => ({ ...h }));
   }
 
   async voidHedge(hedgeId: string, reason: HedgeRow["failureReason"] & string) {

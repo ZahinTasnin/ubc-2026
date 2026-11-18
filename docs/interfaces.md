@@ -220,12 +220,33 @@ e.g. `GEMI-NCAAF-2611212030-ARK-TEX-M-TEX` (= "Texas" contract of Arkansas vs Te
   the next short crypto Up/Down windows (live book, strike once captured, `recommendedDepositDeadline`).
 - `GET /api/markets/:id/deadline-check?depositDeadline=<unix>` → `{ marketId, marketKind, ok, latest, reason? }`.
   Call before the merchant signs `initialize_promo`. Up/Down: deadline ≤ window open − 300 s; other
-  markets: ≤ expiry; always ≥ now + 60 s.
+  markets: ≤ event start (kickoff) if Gemini gives one, else ≤ expiry; always ≥ now + 60 s.
 - `GET /api/markets/:id/outcome` → `{ marketId, outcome: MarketOutcome | null }`. Only official
   Gemini settlement (`status=settled` + `resolutionSide`); `null` until then.
 
-Still 501: `POST /api/promotions` · `GET /api/promotions/:id` · `GET /api/purchases/:id` ·
-`GET /api/merchants/:id/dashboard`. Remaining DTOs: **TODO (Dev 4 proposes, Dev 1 agrees; put in
+- `GET /api/events/:ticker/lines?team=Texas&refundAmount=5000000&maxCostBps=4000` → every open line
+  for a game priced per sale (simulated hedge vs live book) and `suggested`: the most likely line that
+  fits the shop's threshold (`maxCostBps` = max hedge cost as a share of the item price).
+
+**Promotions** (create flow: draft → merchant wallet signs `initialize_promo` → confirm):
+
+- `POST /api/promotions` `{ merchant, shopName, location?, itemName, geminiMarketId, outcomeLabel?,
+offerAmount, depositDeadline, maxYesPriceMicroUsd, hedgeBudget }` → 201
+  `{ promotion (DRAFT), initializePromo: { promoNonce, offerAmount, depositDeadline, marketId } }`.
+  422 if the deadline is unsafe (sports: after kickoff).
+- `POST /api/promotions/:id/confirm` `{ promoPda }` → reads the promo from chain; ACTIVE only if
+  merchant, nonce, price, deadline, market match (409 `mismatches` otherwise; 503 with no gateway).
+- `GET /api/promotions` → public directory of ACTIVE promos with shop name and `live`
+  (`phase` LIVE | PAUSED | WAITING_FOR_RESULT | RESULT_YES | RESULT_NO, `pauseReason`, `canBuy`,
+  `liveAskMicroUsd`, `costPerSale`, `thresholdBps`, `budgetRemaining`). LIVE first.
+- `GET /api/promotions/:id` → one promo; checkout calls this and only takes payment if `live.canBuy`.
+- `GET /api/merchants/:pubkey/dashboard` → shop profile + all its promos (drafts too) with `stats`
+  (purchases, hedged, refunded, contracts, premium, `ifYes` / `ifNo` amounts kept). Simulated.
+
+No login in the MVP: drafts are harmless until the merchant's own wallet signs `initialize_promo`,
+and dashboard data is derivable from public chain data and public Gemini prices.
+
+Still 501: `GET /api/purchases/:id`. Remaining DTOs: **TODO (Dev 4 proposes, Dev 1 agrees; put in
 `@hedged/shared`)**. Never trust client-submitted `HEDGED`, `REFUNDED`, outcome, or price fields;
 never return simulated data as live. Purchase DTOs must expose both the off-chain `status` and the
 on-chain `state`.

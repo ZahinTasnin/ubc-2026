@@ -122,12 +122,21 @@ export function createOrchestrator(deps: OrchestratorDeps) {
 
   async function handleDeposit(event: DepositEvent): Promise<void> {
     const promo = await store.getPromotionByPda(event.promo);
-    if (!promo) {
-      log.warn({ promo: event.promo, purchase: event.purchase }, "deposit for unknown promotion");
-      return;
-    }
-    if (BigInt(event.amount) !== promo.offerAmount) {
-      log.error({ purchase: event.purchase }, "deposit amount does not match offer; ignoring");
+    if (!promo || BigInt(event.amount) !== promo.offerAmount) {
+      // Every promo on this program uses our relayer, so a deposit we cannot hedge (promo not
+      // confirmed with the backend yet, or an unexpected amount) is refunded: nothing was hedged,
+      // so cancelling carries no exposure. Throwing on failure makes the gateway redeliver.
+      log.warn(
+        { promo: event.promo, purchase: event.purchase, known: Boolean(promo) },
+        "deposit the backend cannot hedge; refunding",
+      );
+      await submitWithReread(event.purchase, "Cancelled", () =>
+        gateway.cancelUnhedged(event.purchase),
+      ).catch(async (err: unknown) => {
+        const chain = await gateway.getPurchaseState(event.purchase).catch(() => null);
+        if (chain && chain.state !== "Deposited") return; // already cancelled/refunded
+        throw err;
+      });
       return;
     }
     await store.recordDeposit(event, promo.id);
@@ -170,8 +179,15 @@ export function createOrchestrator(deps: OrchestratorDeps) {
     // Resume after restart: a hedge already exists, so never quote again.
     const existing = await store.getHedgeByPurchase(p.id);
     if (existing) {
-      const to = LIVE_HEDGE.has(existing.status) ? "HEDGE_SIMULATED" : "HEDGE_FAILED";
-      return (await store.transitionPurchase(p.purchasePda, ["PENDING_HEDGE"], to)) !== null;
+      const live = LIVE_HEDGE.has(existing.status);
+      return (
+        (await store.transitionPurchase(
+          p.purchasePda,
+          ["PENDING_HEDGE"],
+          live ? "HEDGE_SIMULATED" : "HEDGE_FAILED",
+          live ? {} : { lastError: existing.failureReason ?? "SIMULATION_FAILED" },
+        )) !== null
+      );
     }
 
     const promo = await store.getPromotion(p.promotionId);
@@ -257,18 +273,21 @@ export function createOrchestrator(deps: OrchestratorDeps) {
 
   /** Re-read chain state right before hedging (CLAUDE.md §5.1 item 4). */
   async function checkEligibleOnChain(p: PurchaseRow, promo: PromotionRow): Promise<void> {
-    const chain = await readPurchase(p.purchasePda);
-    if (!chain) {
-      await store.patchPurchase(p.purchasePda, {
-        needsReconciliation: true,
-        lastError: "purchase account not found on-chain",
-      });
+    // A just-delivered deposit can lag behind reads: treat "not found" as retryable here.
+    const chain = await retry(async () => {
+      const c = await gateway.getPurchaseState(p.purchasePda);
+      if (!c) throw new SolanaGatewayError("ACCOUNT_NOT_FOUND", p.purchasePda);
+      return c;
+    }, gatewayRetryable).catch(async (err: unknown) => {
+      // Leave it PENDING_HEDGE: the reconciliation sweep retries, and the hedge-window check
+      // turns it into a refund if this drags on.
+      await store.patchPurchase(p.purchasePda, { lastError: `pre-hedge read: ${String(err)}` });
       throw new NoHedgeQuiet();
-    }
+    });
     if (chain.state !== "Deposited") throw new ChainMoved(chain);
 
     const [chainPromo, chainConfig] = await Promise.all([
-      retry(() => gateway.getPromoState(promo.promoPda), gatewayRetryable),
+      retry(() => gateway.getPromoState(pdaOf(promo)), gatewayRetryable),
       retry(() => gateway.getConfig(), gatewayRetryable),
     ]);
     if (!chainPromo || chainPromo.state !== "Active") throw new NoHedge("PROMO_NOT_ACTIVE");
@@ -299,7 +318,10 @@ export function createOrchestrator(deps: OrchestratorDeps) {
       log.warn({ purchase: p.purchasePda, err: String(err) }, "mark_hedged failed; re-reading");
       const chain = await readPurchase(p.purchasePda).catch(() => null);
       if (!chain) {
-        await flag(p, `mark_hedged failed and state unreadable: ${String(err)}`);
+        // RPC trouble: keep the hedge and HEDGE_SIMULATED; the sweep retries mark_hedged.
+        await store.patchPurchase(p.purchasePda, {
+          lastError: `mark_hedged failed, state unreadable: ${String(err)}`,
+        });
         return false;
       }
       if (chain.state === "Hedged") return alignFromChain(p, chain);
@@ -419,12 +441,12 @@ export function createOrchestrator(deps: OrchestratorDeps) {
     let receipt: TxReceipt;
     try {
       receipt = await retry(
-        () => gateway.resolvePromotion(promo.promoPda, outcome.outcome),
+        () => gateway.resolvePromotion(pdaOf(promo), outcome.outcome),
         gatewayRetryable,
       );
     } catch (err) {
       // Possibly resolved already (e.g. TX_TIMEOUT that landed, or another instance).
-      const chainPromo = await gateway.getPromoState(promo.promoPda).catch(() => null);
+      const chainPromo = await gateway.getPromoState(pdaOf(promo)).catch(() => null);
       const want = outcome.outcome === "YES" ? "ResolvedYes" : "ResolvedNo";
       if (chainPromo?.state !== want) throw err;
       receipt = { signature: null, slot: null, commitment: "finalized", alreadyApplied: true };
@@ -451,24 +473,41 @@ export function createOrchestrator(deps: OrchestratorDeps) {
     resolvedAtIso: string,
   ): Promise<void> {
     await store.setPromotionResolved(promo.id, outcome, signature);
-    for (const p of await store.listPurchases(promo.id)) {
-      if (p.status === "HEDGED") {
-        const hedge = await store.getHedgeByPurchase(p.id);
-        if (hedge && LIVE_HEDGE.has(hedge.status)) {
-          const payout =
-            outcome === "YES"
-              ? qtyToHundredths(hedge.filledContracts) * BASE_UNITS_PER_HUNDREDTH
-              : 0n;
-          await store.settleHedge(hedge.id, {
-            status: outcome === "YES" ? "SETTLED_WIN" : "SETTLED_LOSS",
-            virtualPayout: payout,
-            settledAt: resolvedAtIso,
-          });
+    await settleResolvedPurchases(promo.id, outcome, resolvedAtIso);
+  }
+
+  /**
+   * Idempotent: settle the simulated hedge of every purchase that was hedged (including ones whose
+   * claim was recorded first), move HEDGED -> RESOLVED, and push unhedged ones to a refund. One
+   * failing purchase never blocks the rest; the reconciliation sweep calls this again.
+   */
+  async function settleResolvedPurchases(
+    promotionId: string,
+    outcome: "YES" | "NO",
+    resolvedAtIso: string,
+  ): Promise<void> {
+    for (const p of await store.listPurchases(promotionId)) {
+      try {
+        if (p.status === "HEDGED" || p.status === "RESOLVED" || p.status === "CLAIMED") {
+          const hedge = await store.getHedgeByPurchase(p.id);
+          if (hedge && LIVE_HEDGE.has(hedge.status)) {
+            const payout =
+              outcome === "YES"
+                ? qtyToHundredths(hedge.filledContracts) * BASE_UNITS_PER_HUNDREDTH
+                : 0n;
+            await store.settleHedge(hedge.id, {
+              status: outcome === "YES" ? "SETTLED_WIN" : "SETTLED_LOSS",
+              virtualPayout: payout,
+              settledAt: resolvedAtIso,
+            });
+          }
+          await store.transitionPurchase(p.purchasePda, ["HEDGED"], "RESOLVED");
+        } else if (UNRESOLVED.includes(p.status)) {
+          // mark_hedged now fails (promo not Active) -> hedge voided -> cancelled -> refund.
+          await processPurchase(p.purchasePda);
         }
-        await store.transitionPurchase(p.purchasePda, ["HEDGED"], "RESOLVED");
-      } else if (UNRESOLVED.includes(p.status)) {
-        // mark_hedged now fails (promo not Active) -> hedge voided -> cancelled -> refund.
-        await processPurchase(p.purchasePda);
+      } catch (err) {
+        log.error({ purchase: p.purchasePda, err: String(err) }, "post-resolution step failed");
       }
     }
   }
@@ -502,10 +541,7 @@ export function createOrchestrator(deps: OrchestratorDeps) {
     if (!promo) throw new Error(`promotion ${promotionId} not found`);
     const flagged: string[] = [];
     let repaired = 0;
-    const chainPurchases = await retry(
-      () => gateway.listPurchases(promo.promoPda),
-      gatewayRetryable,
-    );
+    const chainPurchases = await retry(() => gateway.listPurchases(pdaOf(promo)), gatewayRetryable);
     for (const chain of chainPurchases) {
       const p = await store.getPurchaseByPda(chain.purchasePda);
       if (!p) {
@@ -514,15 +550,33 @@ export function createOrchestrator(deps: OrchestratorDeps) {
       }
       if (await alignFromChain(p, chain)) repaired++;
     }
+    if (promo.resolvedOutcome) {
+      await settleResolvedPurchases(promo.id, promo.resolvedOutcome, now().toISOString());
+    } else {
+      for (const p of await store.listPurchases(promotionId)) {
+        if (UNRESOLVED.includes(p.status)) {
+          await processPurchase(p.purchasePda).catch((err: unknown) =>
+            log.error({ purchase: p.purchasePda, err: String(err) }, "resume failed"),
+          );
+        }
+      }
+    }
     for (const p of await store.listPurchases(promotionId)) {
-      if (UNRESOLVED.includes(p.status)) await processPurchase(p.purchasePda);
-      const after = await store.getPurchaseByPda(p.purchasePda);
-      if (after?.needsReconciliation) flagged.push(`${p.purchasePda}: ${after.lastError}`);
+      if (p.needsReconciliation) flagged.push(`${p.purchasePda}: ${p.lastError}`);
     }
     return { repaired, flagged };
   }
 
+  /** Does this promotion still need the reconciliation sweep? */
+  async function needsSweep(promo: PromotionRow): Promise<boolean> {
+    if (promo.status !== "ACTIVE") return false;
+    if (!promo.resolvedOutcome) return true;
+    const pending = new Set<PurchaseStatus>([...UNRESOLVED, "HEDGED"]);
+    return (await store.listPurchases(promo.id)).some((p) => pending.has(p.status));
+  }
+
   return {
+    needsSweep,
     handleDeposit,
     processPurchase,
     resolveDuePromotions,
@@ -534,6 +588,12 @@ export function createOrchestrator(deps: OrchestratorDeps) {
 }
 
 export type Orchestrator = ReturnType<typeof createOrchestrator>;
+
+/** Workers only ever see ACTIVE promotions, which always have a PDA. */
+function pdaOf(promo: PromotionRow): Base58 {
+  if (!promo.promoPda) throw new Error(`promotion ${promo.id} is not active on-chain yet`);
+  return promo.promoPda;
+}
 
 /** Thrown when the chain shows the purchase already left Deposited; caller aligns instead. */
 class ChainMoved extends Error {

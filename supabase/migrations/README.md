@@ -12,4 +12,6 @@ Constraints: unique `(deposit_tx_signature, deposit_event_index)`, unique `purch
 `simulated = true` enforced by a check, status values per `docs/workflow.md`. RLS is enabled with no
 policies, so only the server's service-role key can read or write.
 
-Status: written, **not yet applied** to a Supabase project or local Postgres.
+Status: written, **not yet applied**. After applying it, run `supabase/tests/smoke.sql` in the SQL
+editor: it exercises every function inside a rolled-back transaction and should print
+`smoke test passed`.

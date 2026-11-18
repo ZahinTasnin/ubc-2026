@@ -18,6 +18,11 @@ test("workers: subscribed deposit is hedged and acked; timer resolves on the off
   gateway.addPromo({ promoPda: "PROMO", marketId: MARKET, depositDeadline: deadline });
   await store.createPromotion({
     promoPda: "PROMO",
+    promoNonce: "1",
+    mint: "FAKE_MINT",
+    itemName: "Latte",
+    shopName: "Bean There",
+    location: "Austin",
     merchant: "FAKE_MERCHANT",
     offerAmount: 5_000_000n,
     depositDeadline: deadline,

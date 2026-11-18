@@ -12,6 +12,7 @@ const solWindow = {
 const texasGame = {
   marketKind: "STANDARD" as const,
   marketState: "open",
+  startsAt: null as string | null,
   opensAt: "2026-11-13T00:00:00.000Z",
   expiresAt: "2026-11-22T20:30:00.000Z",
 };
@@ -29,6 +30,18 @@ test("standard markets: deadline up to the market's expiry", () => {
   const expiry = Math.floor(Date.parse(texasGame.expiresAt) / 1000);
   assert.equal(checkDepositDeadline(texasGame, expiry, NOW).ok, true);
   assert.equal(checkDepositDeadline(texasGame, expiry + 1, NOW).ok, false);
+});
+
+test("sports: deposits stop at kickoff, not at the market's expiry a day later", () => {
+  const game = { ...texasGame, category: "Sports", startsAt: "2026-11-21T20:30:00.000Z" };
+  const kickoff = Math.floor(Date.parse("2026-11-21T20:30:00Z") / 1000);
+  assert.equal(latestDepositDeadline(game), kickoff);
+  assert.equal(checkDepositDeadline(game, kickoff + 60, NOW).ok, false);
+});
+
+test("non-sports markets ignore a start time in the past and use expiry", () => {
+  const fed = { ...texasGame, category: "Economics", startsAt: "2026-01-01T00:00:00.000Z" };
+  assert.equal(latestDepositDeadline(fed), Math.floor(Date.parse(texasGame.expiresAt) / 1000));
 });
 
 test("rejects deadlines too soon, closed markets, and unknown timing", () => {

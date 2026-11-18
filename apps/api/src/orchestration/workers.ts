@@ -68,10 +68,16 @@ export async function startWorkers(opts: WorkerOptions): Promise<RunningWorkers>
 
   const resolvePass = guarded("resolve", () => orchestrator.resolveDuePromotions());
   const reconcilePass = guarded("reconcile", async () => {
-    for (const promo of await store.listActivePromotions()) {
-      const report = await orchestrator.reconcilePromotion(promo.id);
-      if (report.flagged.length > 0) {
-        log.warn({ promo: promo.promoPda, flagged: report.flagged }, "reconciliation flags");
+    // Includes resolved promos that still have refunds or settlements to finish.
+    for (const promo of await store.listPromotions({ status: "ACTIVE" })) {
+      try {
+        if (!(await orchestrator.needsSweep(promo))) continue;
+        const report = await orchestrator.reconcilePromotion(promo.id);
+        if (report.flagged.length > 0) {
+          log.warn({ promo: promo.promoPda, flagged: report.flagged }, "reconciliation flags");
+        }
+      } catch (err) {
+        log.error({ promo: promo.promoPda, err: String(err) }, "reconcile failed for promo");
       }
     }
   });

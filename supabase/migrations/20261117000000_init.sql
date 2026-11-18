@@ -10,15 +10,33 @@
 create extension if not exists pgcrypto;
 
 -- ---------------------------------------------------------------------------------------------
+-- merchants: latest shop profile from a promo this wallet activated on-chain
+-- ---------------------------------------------------------------------------------------------
+create table merchants (
+  pubkey                    text primary key,
+  shop_name                 text not null check (char_length(shop_name) between 1 and 80),
+  location                  text not null default '' check (char_length(location) <= 120),
+  created_at                timestamptz not null default now(),
+  updated_at                timestamptz not null default now()
+);
+
+-- ---------------------------------------------------------------------------------------------
 -- promotions
 -- ---------------------------------------------------------------------------------------------
 create table promotions (
   id                        uuid primary key default gen_random_uuid(),
-  -- on-chain (mirrors Promo account; promo_pda null until initialize_promo is confirmed)
+  -- DRAFT until initialize_promo is verified on-chain with matching parameters, then ACTIVE
+  status                    text not null default 'DRAFT' check (status in ('DRAFT', 'ACTIVE')),
+  -- on-chain (mirrors Promo account; promo_pda and mint null while DRAFT)
   promo_pda                 text unique,
   promo_nonce               numeric(20, 0) not null check (promo_nonce >= 0),
+  -- no FK to merchants: drafts can name any wallet; merchants is written only on activation
   merchant                  text not null,
-  mint                      text not null,
+  mint                      text,
+  item_name                 text not null check (char_length(item_name) between 1 and 60),
+  -- shop profile as submitted with this promo (copied to merchants once activated on-chain)
+  shop_name                 text not null check (char_length(shop_name) between 1 and 80),
+  location                  text not null default '' check (char_length(location) <= 120),
   offer_amount              bigint not null check (offer_amount > 0),
   deposit_deadline          bigint not null,          -- unix seconds
   cancel_timeout_secs       bigint,                   -- snapshot read from chain
@@ -37,8 +55,10 @@ create table promotions (
   resolved_at               timestamptz,
   created_at                timestamptz not null default now(),
   updated_at                timestamptz not null default now(),
-  unique (merchant, promo_nonce)
+  unique (merchant, promo_nonce),
+  check (status = 'DRAFT' or (promo_pda is not null and mint is not null))
 );
+create index promotions_status_idx on promotions (status, on_chain_state);
 
 -- ---------------------------------------------------------------------------------------------
 -- purchases
@@ -160,6 +180,7 @@ create table checkpoints (
 -- ---------------------------------------------------------------------------------------------
 -- RLS: deny everything except the service role (which bypasses RLS).
 -- ---------------------------------------------------------------------------------------------
+alter table merchants        enable row level security;
 alter table promotions       enable row level security;
 alter table purchases        enable row level security;
 alter table market_quotes    enable row level security;
@@ -173,14 +194,28 @@ alter table checkpoints      enable row level security;
 -- ---------------------------------------------------------------------------------------------
 
 -- Compare-and-set a purchase's status. Returns the updated row, or nothing if the current status
--- was not in p_from (another worker got there first).
+-- was not in p_from (another worker got there first). p_patch may set: last_error (cleared when
+-- absent, matching MemoryStore), on_chain_state, needs_reconciliation, mark_hedged_tx_signature,
+-- cancel_tx_signature, claim_tx_signature (kept when absent).
 create function transition_purchase(
-  p_purchase_pda text, p_from text[], p_to text, p_last_error text default null
+  p_purchase_pda text, p_from text[], p_to text, p_patch jsonb default '{}'::jsonb
 ) returns setof purchases
 language sql as $$
   update purchases
      set status = p_to,
-         last_error = p_last_error,
+         last_error = p_patch ->> 'last_error',
+         on_chain_state = case when p_patch ? 'on_chain_state'
+                               then p_patch ->> 'on_chain_state' else on_chain_state end,
+         needs_reconciliation = case when p_patch ? 'needs_reconciliation'
+                               then (p_patch ->> 'needs_reconciliation')::boolean
+                               else needs_reconciliation end,
+         mark_hedged_tx_signature = case when p_patch ? 'mark_hedged_tx_signature'
+                               then p_patch ->> 'mark_hedged_tx_signature'
+                               else mark_hedged_tx_signature end,
+         cancel_tx_signature = case when p_patch ? 'cancel_tx_signature'
+                               then p_patch ->> 'cancel_tx_signature' else cancel_tx_signature end,
+         claim_tx_signature = case when p_patch ? 'claim_tx_signature'
+                               then p_patch ->> 'claim_tx_signature' else claim_tx_signature end,
          attempts = case when p_to = 'PENDING_HEDGE' then attempts + 1 else attempts end,
          updated_at = now()
    where purchase_pda = p_purchase_pda and status = any (p_from)
@@ -198,6 +233,10 @@ declare
   v_reserve     bigint := case when p_hedge ->> 'status' in ('SIMULATED_FILLED', 'SIMULATED_PARTIAL')
                                then coalesce((p_hedge ->> 'premium')::bigint, 0) else 0 end;
 begin
+  -- Serialize per purchase: concurrent callers wait here, then see the first caller's hedge.
+  perform 1 from purchases where id = v_purchase_id for update;
+  if not found then raise exception 'PURCHASE_NOT_FOUND'; end if;
+
   if exists (select 1 from simulated_hedges where purchase_id = v_purchase_id) then
     return query select * from simulated_hedges where purchase_id = v_purchase_id;
     return;
@@ -214,6 +253,7 @@ begin
    where id = v_promotion.id;
 
   return query
+  with inserted as (
   insert into simulated_hedges (
     purchase_id, promotion_id, market_id, quote_id, status, failure_reason, requested_contracts,
     filled_contracts, avg_fill_price_micro_usd, premium, modeled_fee, reserved_premium,
@@ -225,8 +265,8 @@ begin
     (p_hedge ->> 'premium')::bigint, coalesce((p_hedge ->> 'modeled_fee')::bigint, 0), v_reserve,
     coalesce(p_hedge -> 'assumptions', '[]'::jsonb), (p_hedge ->> 'quote_fetched_at')::timestamptz
   )
-  on conflict (purchase_id) do nothing
-  returning *;
+  returning *)
+  select * from inserted;
 end;
 $$;
 
@@ -247,15 +287,29 @@ begin
                         updated_at = now()
    where id = v_hedge.promotion_id;
   return query
+  with voided as (
   update simulated_hedges
      set status = 'VOIDED', failure_reason = coalesce(p_failure_reason, failure_reason),
          reserved_premium = 0, updated_at = now()
    where id = p_hedge_id
-  returning *;
+  returning *)
+  select * from voided;
 end;
 $$;
 
 -- Only the service role may call these.
-revoke all on function transition_purchase(text, text[], text, text) from public, anon, authenticated;
+revoke all on function transition_purchase(text, text[], text, jsonb) from public, anon, authenticated;
 revoke all on function reserve_simulated_hedge(jsonb) from public, anon, authenticated;
 revoke all on function void_simulated_hedge(uuid, text) from public, anon, authenticated;
+
+-- ---------------------------------------------------------------------------------------------
+-- Grants. The project has "Automatically expose new tables" OFF, so nothing is reachable through
+-- the Data API unless granted here. Only the backend's service role gets access; anon and
+-- authenticated (browser keys) get nothing.
+-- ---------------------------------------------------------------------------------------------
+grant usage on schema public to service_role;
+grant select, insert, update, delete on all tables in schema public to service_role;
+grant usage, select on all sequences in schema public to service_role;
+grant execute on function transition_purchase(text, text[], text, jsonb) to service_role;
+grant execute on function reserve_simulated_hedge(jsonb) to service_role;
+grant execute on function void_simulated_hedge(uuid, text) to service_role;

@@ -9,6 +9,7 @@ import {
 import { GeminiNotFoundError, GeminiUnavailableError } from "../gemini/client";
 import { simulateHedge } from "../hedging/simulate";
 import { checkDepositDeadline } from "../promotions/deadline";
+import { priceLines } from "../promotions/line-picker";
 
 const UINT_RE = /^\d{1,18}$/;
 
@@ -111,6 +112,46 @@ export function registerMarketRoutes(
     },
   );
 
+  // Line picker: every open line for a game, priced per sale, with the easiest one that fits.
+  // ?team=Texas&refundAmount=5000000&maxCostBps=4000 (40% of the item price per sale)
+  app.get<{
+    Params: { ticker: string };
+    Querystring: { team?: string; refundAmount?: string; maxCostBps?: string };
+  }>("/api/events/:ticker/lines", async (req, reply) => {
+    const { team, refundAmount = "5000000", maxCostBps = "4000" } = req.query;
+    if (!UINT_RE.test(refundAmount) || BigInt(refundAmount) === 0n) {
+      return reply.code(400).send({ error: "invalid_refund_amount" });
+    }
+    const bps = Number(maxCostBps);
+    if (!Number.isInteger(bps) || bps < 1 || bps > 10_000) {
+      return reply.code(400).send({ error: "invalid_max_cost_bps" });
+    }
+    if (team !== undefined && !/^[\w .&'-]{2,40}$/.test(team)) {
+      return reply.code(400).send({ error: "invalid_team" });
+    }
+    try {
+      const lines = await gemini.listGameLines(req.params.ticker, { team });
+      const result = priceLines(
+        lines,
+        {
+          refundAmount: BigInt(refundAmount),
+          maxCostBps: bps,
+          maxQuoteAgeMs: hedge.maxQuoteAgeMs,
+          feeBps: hedge.feeBps,
+        },
+        new Date(),
+      );
+      return {
+        source: "gemini-predictions",
+        simulated: true,
+        eventTicker: req.params.ticker,
+        ...result,
+      };
+    } catch (err) {
+      return sendGeminiError(reply, err);
+    }
+  });
+
   // Official Gemini settlement for one contract. outcome=null means not settled yet.
   app.get<{ Params: { id: string } }>("/api/markets/:id/outcome", async (req, reply) => {
     try {
@@ -121,7 +162,7 @@ export function registerMarketRoutes(
   });
 }
 
-function sendGeminiError(reply: FastifyReply, err: unknown) {
+export function sendGeminiError(reply: FastifyReply, err: unknown) {
   if (err instanceof MarketNotFoundError || err instanceof GeminiNotFoundError) {
     return reply.code(404).send({ error: "market_not_found", message: err.message });
   }

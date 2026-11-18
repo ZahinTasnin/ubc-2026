@@ -6,6 +6,9 @@ import type { MarketSummary } from "@hedged/shared";
  * The escrow only lets `resolve_promo` run at/after the deadline, and the backend only hedges while
  * a live order book exists, so the deadline has to sit inside the market's tradeable life.
  *
+ * Sports markets: deposits stop at the event start (`startsAt` = kickoff) so nobody buys once the
+ * game is under way. Other standard markets: at expiry (their start time can be in the past).
+ *
  * Crypto Up/Down windows (e.g. SOL05M...): the market resolves against the price captured at
  * `opensAt`, and the order book for the NEXT window to open was observed empty from ~5 minutes
  * before it opens (live checks 2026-11-17, 01:00 and 01:03 UTC). So deposits must stop
@@ -16,7 +19,8 @@ export const UP_DOWN_BOOK_CLOSE_SECS = 300;
 /** Leave time for the merchant to sign initialize_promo and for at least one purchase. */
 export const MIN_DEPOSIT_WINDOW_SECS = 60;
 
-type MarketTiming = Pick<MarketSummary, "marketKind" | "opensAt" | "expiresAt" | "marketState">;
+type MarketTiming = Pick<MarketSummary, "marketKind" | "opensAt" | "expiresAt" | "marketState"> &
+  Partial<Pick<MarketSummary, "startsAt" | "category">>;
 
 const unix = (iso: string | null) => (iso ? Math.floor(Date.parse(iso) / 1000) : null);
 
@@ -26,7 +30,8 @@ export function latestDepositDeadline(market: MarketTiming): number | null {
     const opens = unix(market.opensAt);
     return opens === null ? null : opens - UP_DOWN_BOOK_CLOSE_SECS;
   }
-  return unix(market.expiresAt);
+  const kickoff = market.category === "Sports" ? unix(market.startsAt ?? null) : null;
+  return kickoff ?? unix(market.expiresAt);
 }
 
 export type DeadlineCheck =

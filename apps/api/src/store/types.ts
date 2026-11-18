@@ -17,10 +17,39 @@ import type {
  * reservation) must do so atomically in the implementation, not in the caller.
  */
 
+/**
+ * DRAFT = saved by POST /api/promotions, not yet on-chain. ACTIVE = initialize_promo verified on
+ * chain with matching parameters (that verification is what proves the merchant owns the wallet).
+ */
+export type PromotionStatus = "DRAFT" | "ACTIVE";
+
+export interface MerchantRow {
+  /** Merchant wallet (base58). */
+  pubkey: Base58;
+  shopName: string;
+  /** Free text, e.g. "Guadalupe St, Austin". */
+  location: string;
+  createdAt: string;
+}
+
 export interface PromotionRow {
   id: string;
-  promoPda: Base58;
+  status: PromotionStatus;
+  /** Null while DRAFT. */
+  promoPda: Base58 | null;
+  /** u64 promo PDA seed as a decimal string, chosen by the backend at draft time. */
+  promoNonce: string;
+  /** Mock USD mint, recorded from chain on activation. */
+  mint: Base58 | null;
   merchant: Base58;
+  /** What the customer buys, e.g. "Latte". */
+  itemName: string;
+  /**
+   * Shop profile as submitted with this promo. Anyone can submit a draft naming any wallet, so the
+   * merchants table is only updated from a promo the wallet itself activated on-chain.
+   */
+  shopName: string;
+  location: string;
   offerAmount: bigint;
   depositDeadline: number;
   onChainState: OnChainPromoState;
@@ -31,6 +60,7 @@ export interface PromotionRow {
   reservedPremium: bigint;
   resolvedOutcome: "YES" | "NO" | null;
   resolveTxSignature: Base58 | null;
+  createdAt: string;
 }
 
 export interface PurchaseRow {
@@ -86,13 +116,36 @@ export class BudgetExceededError extends Error {
   }
 }
 
+/** status is derived: ACTIVE when promoPda is given (tests/imports), otherwise DRAFT. */
 export type NewPromotion = Omit<
   PromotionRow,
-  "id" | "reservedPremium" | "resolvedOutcome" | "resolveTxSignature" | "onChainState"
+  | "id"
+  | "status"
+  | "reservedPremium"
+  | "resolvedOutcome"
+  | "resolveTxSignature"
+  | "onChainState"
+  | "createdAt"
 >;
 
+export class PromotionConflictError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "PromotionConflictError";
+  }
+}
+
 export interface Store {
+  upsertMerchant(merchant: Omit<MerchantRow, "createdAt">): Promise<MerchantRow>;
+  getMerchant(pubkey: Base58): Promise<MerchantRow | null>;
+
   createPromotion(promotion: NewPromotion): Promise<PromotionRow>;
+  /**
+   * DRAFT -> ACTIVE once the on-chain promo is verified. Idempotent for the same promoPda; throws
+   * PromotionConflictError if already active with a different PDA or the PDA is taken.
+   */
+  activatePromotion(id: string, onChain: { promoPda: Base58; mint: Base58 }): Promise<PromotionRow>;
+  listPromotions(filter?: { status?: PromotionStatus; merchant?: Base58 }): Promise<PromotionRow[]>;
   getPromotionByPda(promoPda: Base58): Promise<PromotionRow | null>;
   getPromotion(id: string): Promise<PromotionRow | null>;
   /** Promotions still Active on-chain (reconciliation sweep). */
@@ -146,6 +199,7 @@ export interface Store {
    */
   reserveHedge(hedge: NewHedge): Promise<HedgeRow>;
   getHedgeByPurchase(purchaseId: string): Promise<HedgeRow | null>;
+  listHedgesByPromotion(promotionId: string): Promise<HedgeRow[]>;
   /** Void a live simulated hedge and release its reservation. Idempotent. */
   voidHedge(hedgeId: string, reason: HedgeFailureReason): Promise<HedgeRow>;
   settleHedge(

@@ -39,6 +39,8 @@ export interface MarketSummary {
   bestBidMicroUsd: PriceMicroUsd | null;
   lastTradeMicroUsd: PriceMicroUsd | null;
   expiresAt: IsoTimestamp | null;
+  /** Event start (kickoff for sports), when Gemini provides it. Promos stop selling here. */
+  startsAt: IsoTimestamp | null;
   /** Contract effectiveDate. For crypto Up/Down markets this is when the strike is captured. */
   opensAt: IsoTimestamp | null;
   /** "UP_DOWN" = short crypto window (e.g. SOL05M...), resolves vs the price at `opensAt`. */

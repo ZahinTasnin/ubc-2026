@@ -80,6 +80,21 @@ export interface GeminiAdapter {
   getQuote(marketId: string): Promise<QuoteResult>;
   /** Official settlement only. Returns null while the contract is not yet settled. */
   getOutcome(marketId: string): Promise<MarketOutcome | null>;
+  /**
+   * Every open line for one game (the game event plus its spread/total child events), each with its
+   * live ask side. `team` keeps lines whose label mentions it (e.g. "Texas"); totals are dropped
+   * then, since they are not about one team.
+   */
+  listGameLines(eventTicker: string, opts?: { team?: string }): Promise<GameLine[]>;
+}
+
+export interface GameLine {
+  marketId: string;
+  eventTicker: string;
+  eventTitle: string;
+  label: string;
+  asks: QuoteLevel[];
+  fetchedAt: string;
 }
 
 export function createGeminiAdapter(
@@ -175,11 +190,17 @@ export function createGeminiAdapter(
 
       return Promise.all(
         candidates.map(async ({ event, contract }) => {
+          // A window can close between the listing and these reads (book then returns 400):
+          // show it with an empty book instead of failing the whole list.
           const [book, strike] = await Promise.all([
-            client.get<RawBook>(`/v1/book/${encodeURIComponent(contract.instrumentSymbol)}`),
-            client.get<RawStrike>(
-              `/v1/prediction-markets/events/${encodeURIComponent(event.ticker)}/strike`,
-            ),
+            client
+              .get<RawBook>(`/v1/book/${encodeURIComponent(contract.instrumentSymbol)}`)
+              .catch((): RawBook => ({ bids: [], asks: [] })),
+            client
+              .get<RawStrike>(
+                `/v1/prediction-markets/events/${encodeURIComponent(event.ticker)}/strike`,
+              )
+              .catch((): RawStrike => ({})),
           ]);
           const asks = parseAsks(book);
           const depth = asks.reduce((sum, a) => sum + qtyToHundredths(a.quantity), 0n);
@@ -202,6 +223,35 @@ export function createGeminiAdapter(
             askDepthContracts: hundredthsToQty(depth),
             recommendedDepositDeadline: latestDepositDeadline(summary)!,
             fetchedAt: fetchedAt.toISOString(),
+          };
+        }),
+      );
+    },
+
+    async listGameLines(eventTicker, opts = {}) {
+      const game = await client.get<RawEvent>(
+        `/v1/prediction-markets/events/${encodeURIComponent(eventTicker)}`,
+      );
+      const team = opts.team?.toLowerCase();
+      const contracts = [game, ...(game.events ?? [])].flatMap((e) =>
+        (e.contracts ?? [])
+          .filter((c) => c.instrumentSymbol && c.marketState === "open")
+          .filter((c) => !team || c.label.toLowerCase().includes(team))
+          .map((c) => ({ event: e, contract: c })),
+      );
+      // Bounded fan-out: one public book request per candidate line.
+      return Promise.all(
+        contracts.slice(0, 40).map(async ({ event, contract }) => {
+          const book = await client
+            .get<RawBook>(`/v1/book/${encodeURIComponent(contract.instrumentSymbol)}`)
+            .catch(() => ({ bids: [], asks: [] }) as RawBook);
+          return {
+            marketId: contract.instrumentSymbol,
+            eventTicker: event.ticker,
+            eventTitle: event.title,
+            label: contract.label,
+            asks: parseAsks(book),
+            fetchedAt: now().toISOString(),
           };
         }),
       );
@@ -243,6 +293,7 @@ function toSummary(event: RawEvent, c: RawContract, fetchedAt: string): MarketSu
     bestBidMicroUsd: micro(c.prices?.bestBid),
     lastTradeMicroUsd: micro(c.prices?.lastTradePrice),
     expiresAt: c.expiryDate ?? event.expiryDate ?? null,
+    startsAt: event.startTime ?? null,
     opensAt: c.effectiveDate ?? null,
     marketKind: UP_DOWN_TICKER.test(event.ticker) ? "UP_DOWN" : "STANDARD",
     fetchedAt,

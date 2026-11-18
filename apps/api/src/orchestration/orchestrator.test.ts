@@ -70,6 +70,11 @@ function setup(opts: { asks?: [string, string][]; budget?: bigint; cap?: bigint 
 
   const promoReady = store.createPromotion({
     promoPda: PROMO,
+    promoNonce: "1",
+    mint: "FAKE_MINT",
+    itemName: "Latte",
+    shopName: "Bean There",
+    location: "Austin",
     merchant: "FAKE_MERCHANT",
     offerAmount: 5_000_000n,
     depositDeadline: nowUnix() + 3600,
@@ -257,7 +262,8 @@ test("RPC down during the pre-hedge check: purchase stays put for a later retry"
   const t = setup();
   await t.promoReady;
   t.gateway.failNext("getPurchaseState", "RPC_UNAVAILABLE", 3);
-  await assert.rejects(t.orch.handleDeposit(t.gateway.deposit(PROMO, "P1")));
+  await t.orch.handleDeposit(t.gateway.deposit(PROMO, "P1"));
+  assert.equal((await t.purchase("P1"))?.needsReconciliation, false);
   assert.equal((await t.purchase("P1"))?.status, "PENDING_HEDGE");
   assert.equal(t.gem.quoteCalls, 0);
   const promo = (await t.store.getPromotionByPda(PROMO))!;
@@ -357,4 +363,90 @@ test("reconcile: chain Hedged with no ledger hedge is flagged, not silently acce
   const report = await t.orch.reconcilePromotion(promo.id);
   assert.equal(report.flagged.length, 1);
   assert.equal((await t.purchase("P1"))?.needsReconciliation, true);
+});
+
+test("fix: deposit into a promo the backend doesn't track is refunded, not ignored", async () => {
+  const t = setup();
+  await t.promoReady;
+  t.gateway.addPromo({ promoPda: "OTHER_PROMO", marketId: MARKET });
+  await t.orch.handleDeposit(t.gateway.deposit("OTHER_PROMO", "P9"));
+  assert.equal(t.gateway.purchases.get("P9")?.state, "Cancelled");
+  assert.equal(t.gem.quoteCalls, 0);
+});
+
+test("fix: RPC outage after mark_hedged failures keeps the hedge and retries later", async () => {
+  const t = setup();
+  const promo = await t.promoReady;
+  const ev = t.gateway.deposit(PROMO, "P1");
+  // Pre-hedge read OK; then mark_hedged and every re-read fail.
+  const realRead = t.gateway.getPurchaseState.bind(t.gateway);
+  let reads = 0;
+  t.gateway.getPurchaseState = async (pda) => {
+    if (++reads > 1)
+      throw new (await import("@hedged/shared")).SolanaGatewayError("RPC_UNAVAILABLE", "down");
+    return realRead(pda);
+  };
+  t.gateway.failNext("markHedged", "RPC_UNAVAILABLE", 3);
+  await t.orch.handleDeposit(ev);
+  const mid = await t.purchase("P1");
+  assert.equal(mid?.status, "HEDGE_SIMULATED");
+  assert.equal(mid?.needsReconciliation, false);
+  assert.equal((await t.hedgeOf("P1"))?.status, "SIMULATED_FILLED");
+
+  t.gateway.getPurchaseState = realRead; // RPC recovers
+  await t.orch.reconcilePromotion(promo.id);
+  assert.equal((await t.purchase("P1"))?.status, "HEDGED");
+});
+
+test("fix: claim recorded before the result still gets its hedge settled", async () => {
+  const t = setup();
+  const promo = await t.promoReady;
+  await t.orch.handleDeposit(t.gateway.deposit(PROMO, "P1"));
+  t.advance(3600);
+  // Another instance resolves on-chain and the customer claims before we apply the result.
+  await t.gateway.resolvePromotion(PROMO, "YES");
+  await t.orch.handleClaim(t.gateway.claim("P1"));
+  assert.equal((await t.purchase("P1"))?.status, "CLAIMED");
+  await t.orch.handleResolution({
+    signature: "SIG",
+    eventIndex: 0,
+    slot: 99,
+    blockTime: null,
+    commitment: "finalized",
+    promo: PROMO,
+    outcome: "YES",
+    relayer: "FAKE_RELAYER",
+    resolvedAt: Math.floor(Date.now() / 1000),
+  });
+  assert.equal((await t.hedgeOf("P1"))?.status, "SETTLED_WIN");
+  assert.equal((await t.store.getPromotion(promo.id))?.resolvedOutcome, "YES");
+});
+
+test("fix: a failing purchase during resolution does not block the others; sweep finishes it", async () => {
+  const t = setup();
+  const promo = await t.promoReady;
+  await t.orch.handleDeposit(t.gateway.deposit(PROMO, "P1")); // hedged
+  const ev2 = t.gateway.deposit(PROMO, "P2");
+  await t.store.recordDeposit(ev2, promo.id); // recorded, not processed yet
+  t.advance(3600);
+  t.gem.outcome = {
+    marketId: MARKET,
+    outcome: "NO",
+    source: "gemini-official-settlement",
+    resolvedAt: "2026-11-21T23:00:00.000Z",
+    fetchedAt: "2026-11-21T23:01:00.000Z",
+  };
+  // P2's refund path hits a dead RPC during resolution.
+  t.gateway.failNext("getPurchaseState", "RPC_UNAVAILABLE", 3);
+  await t.orch.resolveDuePromotions();
+  assert.equal((await t.purchase("P1"))?.status, "RESOLVED");
+  assert.equal((await t.hedgeOf("P1"))?.status, "SETTLED_LOSS");
+  assert.notEqual((await t.purchase("P2"))?.status, "CANCELLED");
+
+  // Promo is resolved, but the sweep still picks it up and refunds P2.
+  const fresh = (await t.store.getPromotion(promo.id))!;
+  assert.equal(await t.orch.needsSweep(fresh), true);
+  await t.orch.reconcilePromotion(promo.id);
+  assert.equal((await t.purchase("P2"))?.status, "CANCELLED");
+  assert.equal(await t.orch.needsSweep((await t.store.getPromotion(promo.id))!), false);
 });

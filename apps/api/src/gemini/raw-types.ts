@@ -35,8 +35,12 @@ export interface RawEvent {
   /** MarketStatus: approved | active | closed | under_review | settled | invalid */
   status: string;
   expiryDate?: string | null;
+  /** Kickoff / event start for sports (observed on NCAAF games); may be absent elsewhere. */
+  startTime?: string | null;
   resolvedAt?: string | null;
   contracts: RawContract[];
+  /** Sibling markets of the same game (spreads, totals, ...), each with its own contracts. */
+  events?: RawEvent[];
 }
 
 export interface RawEventsPage {
